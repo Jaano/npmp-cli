@@ -1,11 +1,11 @@
 __pycache__/
+.*/c*[!x]l*[!x]-i*[!x]s*[!x].m[d]
 *.pyc
 .pytest_cache/
 .venv/
-dist/
-build/
 *.egg-info/
-exports/
-savings/
 .env
 .env.test
+.vscode/
+npmp-config/
+/my-*.sh

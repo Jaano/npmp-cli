@@ -1,3 +1,3 @@
-__all__ = ["NPMplusClient"]
+__all__ = ["NPMplusApi"]
 
-from .api_client import NPMplusClient
+from .npmplus_api import NPMplusApi

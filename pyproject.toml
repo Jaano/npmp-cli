@@ -4,16 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "npmp-cli"
-version = "0.1.58"
-description = "Python client + saver for NPMplus (ZoeyVid/NPMplus)"
+version = "0.1.104"
+description = "Python CLI for NPMplus (ZoeyVid/NPMplus)"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "UNLICENSED" }
+license = { file = "LICENSE.txt" }
 authors = [{ name = "" }]
 dependencies = [
   "docker>=7.0",
   "httpx>=0.26",
-  "pyyaml>=6.0",
   "python-dotenv>=1.0",
   "typer>=0.12",
 ]
@@ -22,6 +21,7 @@ dependencies = [
 dev = [
   "pytest>=7.4",
   "ruff>=0.8",
+  "vulture>=2.11",
 ]
 
 [project.scripts]
@@ -55,7 +55,6 @@ select = [
   "SIM",  # flake8-simplify
 ]
 ignore = [
-  "W191",  # indentation-contains-tabs (formatter uses tabs)
   "E501",  # line-too-long (formatter handles this)
   "B008",  # function-call-in-default-argument (typer pattern)
   "SIM105",  # suppressible-exception (prefer explicit try/except)
@@ -65,4 +64,5 @@ ignore = [
 
 [tool.ruff.format]
 quote-style = "double"
-indent-style = "tab"
+indent-style = "space"
+
