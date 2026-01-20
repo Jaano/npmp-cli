@@ -6,6 +6,8 @@ __pycache__/
 *.egg-info/
 .env
 .env.test
-.vscode/
+/.vscode/
+/.coverage
+NPMplus/
 npmp-config/
-/my-*.sh
+/my-*.*

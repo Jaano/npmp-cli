@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import glob
 import os
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
 import typer
 
 from .configmanager import ConfigManager
-from .docker_syncer import DockerSyncer
-from .filemanager import JsonFileManager, YmlFileManager
-from .npmplus_api import NPMplusApi
+from .dockersyncer import DockerSyncer
+from .jsonfilemanager import JsonFileManager, write_json_file
+from .npmplus_client import NPMplusClient
+from .ymlfilemanager import YmlFileManager
 
 logger = ConfigManager.get_logger(__name__)
 
@@ -58,15 +60,13 @@ def _expand_input_files(values: list[str], *, require_suffix: str | None = None)
     if not expanded:
         suffix_msg = "" if require_suffix is None else f" (with {require_suffix} suffix)"
         raise typer.BadParameter(f"No valid files found{suffix_msg} for: {', '.join(values)}")
+    expanded.sort(key=lambda p: (0 if "access-lists" in p.name else 1, p.name))
     return expanded
 
 
 @contextmanager
-def _client_context(
-    *,
-    identity: str | None,
-):
-    """Create and authenticate NPMplusApi with consistent behavior across commands.
+def _client_context(*, readonly: bool = False) -> Generator[NPMplusClient, None, None]:
+    """Create and authenticate NPMplusClient with consistent behavior across commands.
 
     All credentials (NPMP_BASE_URL, NPMP_TOKEN or NPMP_IDENTITY + NPMP_SECRET)
     are read from environment only.
@@ -75,16 +75,22 @@ def _client_context(
     if not base_url:
         raise typer.BadParameter("NPMP_BASE_URL is required (set in environment or .env)")
     verify_tls = ConfigManager.verify_tls()
-    with NPMplusApi(base_url=base_url, verify_tls=verify_tls) as client:
+    try:
+        retry_count = ConfigManager.http_retry_count()
+    except ValueError as e:
+        raise typer.BadParameter(str(e)) from None
+
+    with NPMplusClient(base_url=base_url, verify_tls=verify_tls, retry_count=retry_count, readonly=readonly) as client:
         token_env = ConfigManager.token()
         if token_env:
             client.set_token_cookie(token_env)
         else:
+            identity_env = ConfigManager.identity()
             secret_env = ConfigManager.secret()
-            if identity and secret_env:
-                client.login(identity, secret_env)
+            if identity_env and secret_env:
+                client.login(identity_env, secret_env)
             else:
-                raise typer.BadParameter("Provide NPMP_TOKEN or both --identity and NPMP_SECRET in environment")
+                raise typer.BadParameter("Provide NPMP_TOKEN or both NPMP_IDENTITY and NPMP_SECRET in environment")
         yield client
 
 
@@ -97,51 +103,81 @@ def _main(
         help="Logging level (DEBUG, INFO, WARNING, ERROR)",
         show_default=True,
     ),
+    log_console_stream: str = typer.Option(
+        "stderr",
+        "--log-console-stream",
+        envvar="NPMP_LOG_CONSOLE_STREAM",
+        help="Console log stream: stderr or stdout (default: stderr)",
+        show_default=True,
+    ),
+    log_file: str | None = typer.Option(
+        None,
+        "--log-file",
+        envvar="NPMP_LOG_FILE",
+        help="Optional log file path. If you pass an existing directory or a path ending with '/', logs to <dir>/npmp-cli.log.",
+        show_default=False,
+    ),
+    log_file_level: str | None = typer.Option(
+        None,
+        "--log-file-level",
+        envvar="NPMP_LOG_FILE_LEVEL",
+        help="Logging level for --log-file (defaults to --log-level)",
+        show_default=False,
+    ),
 ) -> None:
     try:
-        ConfigManager.configure_logging(log_level)
+        ConfigManager.configure_logging(
+            log_level,
+            console_stream=log_console_stream,
+            log_file=log_file,
+            file_level=log_file_level,
+        )
     except ValueError as e:
         raise typer.BadParameter(str(e)) from None
 
 
 @app.command("save")
 def save(
-    identity: str | None = typer.Option(None, "--identity", envvar="NPMP_IDENTITY"),
     out: Path = typer.Option(Path("npmp-config"), "--out"),
-    kind: str = typer.Option(
-        "all",
-        "--kind",
-        help="Which NPMplus host type(s) to save",
-        case_sensitive=False,
-        show_default=True,
-    ),
-    query: str | None = typer.Option(None, "--query", help="Optional server-side search query"),
 ) -> None:
-    """Save NPMplus “sites” (hosts) as JSON files.
+    """Save NPMplus "sites" (hosts) as JSON files.
 
-    By default saves all host types: proxy-hosts, redirection-hosts, dead-hosts, streams.
+    Saves all host types: proxy-hosts, redirection-hosts, dead-hosts, streams, access-lists.
     """
 
-    with _client_context(identity=identity) as client:
+    with _client_context() as client:
         try:
-            JsonFileManager(client).save(kind=kind, out=out, query=query)
+            JsonFileManager(client).save(out=out)
         except PermissionError as e:
             raise typer.Exit(code=2) from e
         except ValueError as e:
             raise typer.BadParameter(str(e)) from None
 
-        logger.info("Saved to %s", out)
+        logger.info("Done")
 
 
 @app.command("schema")
 def schema(
-    identity: str | None = typer.Option(None, "--identity", envvar="NPMP_IDENTITY"),
+    out: str = typer.Option(
+        "schema.json",
+        "--out",
+        "-o",
+        help="Output file path for schema JSON. Use '-' for stdout.",
+        show_default=True,
+    ),
 ) -> None:
-    """Fetch and print `/api/schema` (OpenAPI) as JSON."""
-    with _client_context(identity=identity) as client:
-        import json
+    """Fetch `/api/schema` (OpenAPI) and write it as JSON."""
+    with _client_context() as client:
+        schema_json = client.get_schema()
+        if (out or "").strip() == "-":
+            import json
 
-        print(json.dumps(client.get_schema(), ensure_ascii=False, sort_keys=True, indent=2))
+            print(json.dumps(schema_json, ensure_ascii=False, sort_keys=True, indent=2))
+            return
+
+        out_path = Path(out).expanduser()
+        write_json_file(out_path, schema_json)
+        logger.info("Saved schema to %s", out_path)
 
 
 @app.command("load")
@@ -150,7 +186,16 @@ def load(
         ...,
         help="One or more saved JSON files, or glob patterns (e.g. 'npmp-config/proxy-hosts__*.json')",
     ),
-    identity: str | None = typer.Option(None, "--identity", envvar="NPMP_IDENTITY"),
+    takeownership: bool = typer.Option(
+        False,
+        "--takeownership",
+        help="If a matching record exists but is owned by a different user, delete it and create a new one owned by the current authenticated user",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Preview changes without modifying the NPMplus server",
+    ),
 ) -> None:
     """Load one or more saved JSON files into NPMplus.
 
@@ -158,21 +203,20 @@ def load(
     """
     input_files = _expand_input_files(files, require_suffix=".json")
 
-    with _client_context(identity=identity) as client:
+    with _client_context(readonly=dry_run) as client:
         errors = 0
         for file in input_files:
             try:
-                kind_name, resolved_mode, new_id = JsonFileManager(client).load(
+                JsonFileManager(client).load(
                     file=file,
+                    takeownership=takeownership,
                 )
             except ValueError as e:
                 errors += 1
-                raise typer.BadParameter(str(e)) from None
-            except Exception:
+                logger.error("Failed to load %s: %s", file, e)
+            except Exception as e:
                 errors += 1
-                raise typer.Exit(code=2) from None
-
-            logger.info("Loaded %s (%s) id=%s from %s", kind_name, resolved_mode, new_id, file)
+                logger.error("Failed to load %s: %s", file, e)
 
         if errors:
             raise typer.Exit(code=2)
@@ -180,53 +224,120 @@ def load(
 
 @app.command("sync-docker")
 def sync_docker(
-    identity: str | None = typer.Option(None, "--identity", envvar="NPMP_IDENTITY"),
+    takeownership: bool = typer.Option(
+        False,
+        "--takeownership",
+        help="If a matching item exists but is owned by a different user, delete it and create a new one owned by the current authenticated user",
+    ),
     disable_orphans: bool = typer.Option(
         False,
         "--disable-orphans",
-        help="Disable (enabled=false) proxy-hosts owned by the current user that are not present in docker specs",
+        help="Disable (enabled=false) items owned by the current user that are not present in docker specs",
     ),
     delete_orphans: bool = typer.Option(
         False,
         "--delete-orphans",
-        help="Delete proxy-hosts owned by the current user that are not present in docker specs",
+        help="Delete items owned by the current user that are not present in docker specs",
     ),
-    owner_user_id: int | None = typer.Option(
-        None,
-        "--owner-user-id",
-        envvar="NPMP_OWNER_USER_ID",
-        help="Override owner_user_id used for --disable-orphans and --delete-orphans (usually inferred automatically)",
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Preview changes without modifying the NPMplus server",
     ),
 ) -> None:
-    """Scan all Docker containers for labels with the configured prefix and upsert proxy-hosts."""
+    """Scan Docker containers for labels and sync proxy-hosts, dead-hosts, redirection-hosts, streams."""
 
-    specs = DockerSyncer.scan_docker_proxy_host_specs()
-    if not specs and not disable_orphans and not delete_orphans:
+    proxy_specs, dead_specs, redirect_specs, stream_specs = DockerSyncer.scan_docker_specs()
+    total_specs = len(proxy_specs) + len(dead_specs) + len(redirect_specs) + len(stream_specs)
+
+    if total_specs == 0 and not disable_orphans and not delete_orphans:
         logger.info("No docker containers found with required label prefix")
         return
 
-    with _client_context(identity=identity) as client:
-        created, updated, skipped = DockerSyncer.sync_docker_proxy_hosts(
-            client=client,
-            specs=specs,
-            disable_orphans=disable_orphans,
-            delete_orphans=delete_orphans,
-            owner_user_id=owner_user_id,
-        )
+    with _client_context(readonly=dry_run) as client:
+        total_created = 0
+        total_updated = 0
+        total_skipped = 0
 
-    logger.info("Docker sync complete: created=%s updated=%s skipped=%s", created, updated, skipped)
+        try:
+            if proxy_specs or disable_orphans or delete_orphans:
+                created, updated, skipped = DockerSyncer.sync_docker_proxy_hosts(
+                    client=client,
+                    specs=proxy_specs,
+                    takeownership=takeownership,
+                    disable_orphans=disable_orphans,
+                    delete_orphans=delete_orphans,
+                )
+                total_created += created
+                total_updated += updated
+                total_skipped += skipped
+                logger.info("proxy-hosts: created=%d updated=%d skipped=%d", created, updated, skipped)
+
+            if dead_specs or disable_orphans or delete_orphans:
+                created, updated, skipped = DockerSyncer.sync_docker_dead_hosts(
+                    client=client,
+                    specs=dead_specs,
+                    takeownership=takeownership,
+                    disable_orphans=disable_orphans,
+                    delete_orphans=delete_orphans,
+                )
+                total_created += created
+                total_updated += updated
+                total_skipped += skipped
+                logger.info("dead-hosts: created=%d updated=%d skipped=%d", created, updated, skipped)
+
+            if redirect_specs or disable_orphans or delete_orphans:
+                created, updated, skipped = DockerSyncer.sync_docker_redirection_hosts(
+                    client=client,
+                    specs=redirect_specs,
+                    takeownership=takeownership,
+                    disable_orphans=disable_orphans,
+                    delete_orphans=delete_orphans,
+                )
+                total_created += created
+                total_updated += updated
+                total_skipped += skipped
+                logger.info("redirection-hosts: created=%d updated=%d skipped=%d", created, updated, skipped)
+
+            if stream_specs or disable_orphans or delete_orphans:
+                created, updated, skipped = DockerSyncer.sync_docker_streams(
+                    client=client,
+                    specs=stream_specs,
+                    takeownership=takeownership,
+                    disable_orphans=disable_orphans,
+                    delete_orphans=delete_orphans,
+                )
+                total_created += created
+                total_updated += updated
+                total_skipped += skipped
+                logger.info("streams: created=%d updated=%d skipped=%d", created, updated, skipped)
+
+        except ValueError as e:
+            raise typer.BadParameter(str(e)) from None
+
+    logger.info(
+        "Docker sync complete: total_created=%d total_updated=%d total_skipped=%d",
+        total_created,
+        total_updated,
+        total_skipped,
+    )
 
 
 @app.command("json-to-compose")
 def json_to_compose(
     paths: list[str] = typer.Argument(
         ...,
-        help="One or more saved proxy-host JSON files, or glob patterns (optionally append OUTPUT.yml for a single input)",
+        help="One or more saved JSON files (proxy-hosts, dead-hosts, redirection-hosts, streams), or glob patterns",
+    ),
+    service_name: str | None = typer.Option(
+        None,
+        "--service-name",
+        help="Docker-compose service key to use (defaults to first domain label, e.g. 'app' from 'app.example.com')",
     ),
 ) -> None:
-    """Convert saved proxy-host JSON file(s) to docker-compose `labels:` YAML blocks.
+    """Convert saved JSON file(s) to docker-compose `labels:` YAML blocks.
 
-    Accepts explicit file paths or glob patterns. For multiple inputs, output is written next to each input.
+    Auto-detects item type from filename pattern (proxy-hosts__*, dead-hosts__*, redirection-hosts__*, streams__*).
     """
     output_file: Path | None = None
     inputs = paths
@@ -241,12 +352,32 @@ def json_to_compose(
         raise typer.BadParameter("OUTPUT.yml can only be used when converting a single input file")
 
     for input_file in input_files:
+        name = input_file.name.lower()
         try:
-            out_path = YmlFileManager.write_proxy_host_json_as_compose_labels_yaml(
-                input_file,
-                output_file,
-            )
+            if "dead-hosts__" in name:
+                out_path = YmlFileManager.write_dead_host_json_as_compose_labels_yaml(
+                    input_file,
+                    output_file,
+                    service_name=service_name,
+                )
+            elif "redirection-hosts__" in name:
+                out_path = YmlFileManager.write_redirection_host_json_as_compose_labels_yaml(
+                    input_file,
+                    output_file,
+                    service_name=service_name,
+                )
+            elif "streams__" in name:
+                out_path = YmlFileManager.write_stream_json_as_compose_labels_yaml(
+                    input_file,
+                    output_file,
+                    service_name=service_name,
+                )
+            else:
+                out_path = YmlFileManager.write_proxy_host_json_as_compose_labels_yaml(
+                    input_file,
+                    output_file,
+                    service_name=service_name,
+                )
+            logger.info("Wrote %s", out_path)
         except ValueError as e:
-            raise typer.BadParameter(str(e)) from None
-
-        logger.info("Wrote %s", out_path)
+            logger.warning("Skipping %s: %s", input_file.name, e)

@@ -1,17 +1,6 @@
-"""Vulture allowlist for Typer-dispatched CLI functions.
-
-Typer registers commands via decorators, so vulture often can't see call-sites.
-This file marks the exported CLI callbacks/commands as "used".
-
-Usage:
-	/Users/jaano/Nextcloud/Projects/npmp-cli/.venv/bin/python -m vulture \
-		src/npmp_cli tests tests/vulture_allowlist.py
-"""
-
 from npmp_cli import cli as _cli
 from npmp_cli.npmplus_api import NPMplusApi
 
-# Typer callback + commands (referenced indirectly via decorators)
 _ = _cli._main
 _ = _cli.save
 _ = _cli.schema
@@ -19,8 +8,6 @@ _ = _cli.load
 _ = _cli.sync_docker
 _ = _cli.json_to_compose
 
-
-# NPMplusApi endpoint wrappers (public API surface; may be used externally)
 _ = NPMplusApi.set_token_cookie
 _ = NPMplusApi.login
 _ = NPMplusApi.refresh_token
@@ -39,13 +26,12 @@ _ = NPMplusApi.set_user_permissions
 _ = NPMplusApi.login_as_user
 
 _ = NPMplusApi.list_audit_log
-_ = NPMplusApi.get_audit_log_event
 
 _ = NPMplusApi.get_hosts_report
 
 _ = NPMplusApi.list_settings
 _ = NPMplusApi.get_setting
-_ = NPMplusApi.update_setting
+_ = NPMplusApi.set_setting
 
 _ = NPMplusApi.check_version
 

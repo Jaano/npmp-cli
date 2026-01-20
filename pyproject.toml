@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "npmp-cli"
-version = "0.1.104"
+version = "0.2.32"
 description = "Python CLI for NPMplus (ZoeyVid/NPMplus)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE.txt" }
-authors = [{ name = "" }]
+authors = [{ name = "Jaano", url = "https://github.com/Jaano" }]
 dependencies = [
   "docker>=7.0",
   "httpx>=0.26",
@@ -17,9 +17,15 @@ dependencies = [
   "typer>=0.12",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Jaano/npmp-cli"
+Repository = "https://github.com/Jaano/npmp-cli"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=7.4",
+  "pytest-cov>=4.1",
+  "pyright>=1.1.390",
   "ruff>=0.8",
   "vulture>=2.11",
 ]
@@ -34,10 +40,10 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.pytest.ini_options]
-addopts = "-q"
+addopts = "-q -m 'not integration' --cov=npmp_cli --cov-report=term"
 testpaths = ["tests"]
 markers = [
-  "integration: tests that hit a real NPMplus server (opt-in)",
+  "integration: integration tests (slow; requires live env)",
 ]
 
 [tool.ruff]
@@ -62,7 +68,19 @@ ignore = [
   "SIM118",  # in-dict-keys (explicit .keys() is fine)
 ]
 
+[tool.ruff.lint.isort]
+known-first-party = ["npmp_cli"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["**/__pycache__", ".venv", "NPMplus"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+reportMissingTypeStubs = false
 
