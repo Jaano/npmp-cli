@@ -44,8 +44,8 @@ def test_scan_and_sync(require_docker: bool, npmplus_client: NPMplusClient, uniq
         except Exception as e:
             pytest.skip(f"Failed to start docker container: {e}")
 
-        specs = DockerSyncer.scan_docker_proxy_host_specs()
-        spec = next((s for s in specs if domain in (s.domain_names or [])), None)
+        proxy_specs, _, _, _ = DockerSyncer.scan_docker_specs()
+        spec = next((s for s in proxy_specs if domain in (s.domain_names or [])), None)
         assert spec is not None
 
         DockerSyncer.sync_docker_proxy_hosts(client=npmplus_client, specs=[spec])

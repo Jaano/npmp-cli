@@ -62,6 +62,7 @@ You can set these environment variables or put them in `.env` at repo root (will
 | Command | Description |
 | --- | --- |
 | `save [--out PATH]` | Export resources to JSON files |
+| `audit-log [--out PATH]` | Export audit log to a plain text file (timestamps in local time) |
 | `load [--takeownership] [--dry-run] INPUT...` | Import JSON configs into NPMplus |
 | `schema [--out PATH]` | Save OpenAPI schema |
 | `sync-docker [--takeownership] [--disable-orphans] [--delete-orphans] [--dry-run]` | Sync Docker labels to NPMplus |
@@ -73,6 +74,7 @@ Examples:
 
 ```bash
 npmp-cli save --out ./npmp-config
+npmp-cli audit-log --out ./audit.log
 npmp-cli load --takeownership './npmp-config/proxy-hosts__*.json'
 npmp-cli sync-docker --takeownership --disable-orphans
 npmp-cli json-to-compose ./npmp-config/proxy-hosts__62.json

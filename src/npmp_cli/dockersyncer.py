@@ -405,185 +405,6 @@ class DockerSyncer:
 
         return proxy_specs, dead_specs, redirect_specs, stream_specs
 
-    @staticmethod
-    def extract_proxy_host_spec_from_labels(
-        *,
-        labels: dict[str, str] | None,
-        container_id: str,
-        container_name: str,
-    ) -> DockerProxyHostSpec | None:
-        """Extract a proxy-host spec from Docker container labels.
-
-        Parses labels with the configured prefix and returns a DockerProxyHostSpec
-        if all required fields are present and valid.
-        """
-        labels = labels or {}
-        prefix = ConfigManager.docker_label_prefix()
-        prefixed = {k: v for k, v in labels.items() if isinstance(k, str) and k.startswith(prefix)}
-        if not prefixed:
-            return None
-
-        domains_raw = labels.get(f"{prefix}domain_names")
-        forward_host = labels.get(f"{prefix}forward_host")
-        forward_port_raw = labels.get(f"{prefix}forward_port")
-        forward_scheme = labels.get(f"{prefix}forward_scheme")
-
-        access_list = labels.get(f"{prefix}access_list")
-        advanced_config = labels.get(f"{prefix}advanced_config")
-        allow_websocket_upgrade = _parse_bool(labels.get(f"{prefix}allow_websocket_upgrade"))
-        block_exploits = _parse_bool(labels.get(f"{prefix}block_exploits"))
-        caching_enabled = _parse_bool(labels.get(f"{prefix}caching_enabled"))
-        certificate_raw = labels.get(f"{prefix}certificate")
-        enabled = _parse_bool(labels.get(f"{prefix}enabled"))
-        hsts_enabled = _parse_bool(labels.get(f"{prefix}hsts_enabled"))
-        hsts_subdomains = _parse_bool(labels.get(f"{prefix}hsts_subdomains"))
-        http2_support = _parse_bool(labels.get(f"{prefix}http2_support"))
-        ssl_forced = _parse_bool(labels.get(f"{prefix}ssl_forced"))
-
-        loc_pattern = re.compile(rf"^{re.escape(prefix)}loc(\d+)_(.+)$")
-        loc_groups: dict[int, dict[str, str]] = {}
-        for k, v in prefixed.items():
-            m = loc_pattern.match(k)
-            if not m:
-                continue
-            try:
-                idx = int(m.group(1))
-            except Exception:
-                continue
-            if idx <= 0:
-                continue
-            loc_groups.setdefault(idx, {})[m.group(2)] = v
-
-        if not domains_raw or not forward_host or not forward_port_raw or not forward_scheme:
-            return None
-
-        domain_names = [d.lower() for d in _split_csv(domains_raw)]
-        if not domain_names:
-            return None
-
-        try:
-            forward_port = int(str(forward_port_raw).strip())
-        except Exception:
-            return None
-        if forward_port <= 0 or forward_port > 65535:
-            return None
-
-        locations: list[DockerLocationSpec] = []
-        for idx in sorted(loc_groups.keys()):
-            g = loc_groups[idx]
-            path = str(g.get("path") or "").strip()
-            loc_forward_host = str(g.get("forward_host") or "").strip()
-            loc_forward_port_raw = g.get("forward_port")
-            loc_forward_scheme = str(g.get("forward_scheme") or str(forward_scheme)).strip()
-            if not path or not loc_forward_host or not loc_forward_port_raw:
-                continue
-            try:
-                loc_forward_port = int(str(loc_forward_port_raw).strip())
-            except Exception:
-                continue
-            if loc_forward_port <= 0 or loc_forward_port > 65535:
-                continue
-            locations.append(
-                DockerLocationSpec(
-                    path=path,
-                    forward_host=loc_forward_host,
-                    forward_port=loc_forward_port,
-                    forward_scheme=loc_forward_scheme,
-                    advanced_config=(None if g.get("advanced_config") is None else str(g.get("advanced_config"))),
-                    allow_websocket_upgrade=_parse_bool(g.get("allow_websocket_upgrade")),
-                    block_exploits=_parse_bool(g.get("block_exploits")),
-                    caching_enabled=_parse_bool(g.get("caching_enabled")),
-                    location_type=(None if g.get("location_type") is None else str(g.get("location_type")).strip()),
-                )
-            )
-
-        return DockerProxyHostSpec(
-            container_id=container_id,
-            container_name=(container_name.lstrip("/") if container_name else container_id[:12]),
-            domain_names=domain_names,
-            forward_host=str(forward_host).strip(),
-            forward_port=forward_port,
-            forward_scheme=str(forward_scheme).strip(),
-            locations=locations,
-            access_list=None if access_list is None else str(access_list).strip(),
-            advanced_config=None if advanced_config is None else str(advanced_config),
-            allow_websocket_upgrade=allow_websocket_upgrade,
-            block_exploits=block_exploits,
-            caching_enabled=caching_enabled,
-            certificate=(None if certificate_raw is None else str(certificate_raw).strip()),
-            enabled=enabled,
-            hsts_enabled=hsts_enabled,
-            hsts_subdomains=hsts_subdomains,
-            http2_support=http2_support,
-            ssl_forced=ssl_forced,
-        )
-
-    @staticmethod
-    def extract_proxy_host_specs_from_inspect(
-        inspect_data: Sequence[dict[str, Any]],
-    ) -> list[DockerProxyHostSpec]:
-        """Extract proxy-host specs from Docker inspect data.
-
-        Parses inspect data (like container.attrs from Docker SDK) and returns
-        proxy-host specs for containers with valid label configuration.
-        """
-        specs: list[DockerProxyHostSpec] = []
-        for item in inspect_data:
-            container_id = str(item.get("Id") or "").strip()
-            container_name = str(item.get("Name") or "").strip()
-            labels = ((item.get("Config") or {}) if isinstance(item.get("Config"), dict) else {}).get("Labels") or {}
-            if not isinstance(labels, dict):
-                labels = {}
-            spec = DockerSyncer.extract_proxy_host_spec_from_labels(
-                labels={str(k): str(v) for k, v in labels.items() if k is not None and v is not None},
-                container_id=container_id,
-                container_name=container_name,
-            )
-            if spec is not None:
-                specs.append(spec)
-        return specs
-
-    @classmethod
-    def scan_docker_proxy_host_specs(cls) -> list[DockerProxyHostSpec]:
-        """Scan all Docker containers and extract proxy-host specs from labels.
-
-        Uses the Python Docker SDK (`docker` module) via `docker.from_env()`.
-        Respects the DOCKER_HOST environment variable; if not set, connects to
-        the local Docker socket (unix:///var/run/docker.sock on Unix systems).
-        """
-        try:
-            import docker  # type: ignore[import-not-found]
-        except Exception as e:
-            raise RuntimeError("Python docker module not installed; install 'docker' package") from e
-
-        try:
-            client = docker.from_env()
-        except Exception as e:
-            raise RuntimeError("Failed to initialize Docker client from environment") from e
-
-        try:
-            containers = client.containers.list(all=True)
-        except Exception as e:
-            raise RuntimeError("Failed to list docker containers") from e
-
-        inspect_items: list[dict[str, Any]] = []
-        for c in containers:
-            try:
-                attrs = getattr(c, "attrs", None) or {}
-                if isinstance(attrs, dict):
-                    inspect_items.append(attrs)
-            except Exception:
-                # Skip containers that cannot be inspected.
-                continue
-
-        specs = cls.extract_proxy_host_specs_from_inspect(inspect_items)
-        logger.info(
-            "Found %s docker container specs with required prefix=%s",
-            len(specs),
-            ConfigManager.docker_label_prefix(),
-        )
-        return specs
-
     @classmethod
     def _get_docker_inspect_items(cls) -> list[dict[str, Any]]:
         """Get Docker inspect data for all containers."""
@@ -664,24 +485,6 @@ class DockerSyncer:
         return all_proxy, all_dead, all_redirect, all_stream
 
     @classmethod
-    def scan_docker_dead_host_specs(cls) -> list[DockerDeadHostSpec]:
-        """Scan all Docker containers and extract dead-host specs from labels."""
-        _, dead_specs, _, _ = cls.scan_docker_specs()
-        return dead_specs
-
-    @classmethod
-    def scan_docker_redirection_host_specs(cls) -> list[DockerRedirectionHostSpec]:
-        """Scan all Docker containers and extract redirection-host specs from labels."""
-        _, _, redirect_specs, _ = cls.scan_docker_specs()
-        return redirect_specs
-
-    @classmethod
-    def scan_docker_stream_specs(cls) -> list[DockerStreamSpec]:
-        """Scan all Docker containers and extract stream specs from labels."""
-        _, _, _, stream_specs = cls.scan_docker_specs()
-        return stream_specs
-
-    @classmethod
     def sync_docker_proxy_hosts(
         cls,
         *,
@@ -700,15 +503,6 @@ class DockerSyncer:
         in docker specs will be deleted.
         """
 
-        def _natural_index_for_spec(spec: DockerProxyHostSpec) -> str:
-            parts = [str(d).strip().lower() for d in (spec.domain_names or [])]
-            parts = [p for p in parts if p]
-            parts = sorted(set(parts))
-            return ",".join(parts)
-
-        def _existing_owner_user_id(item: dict[str, Any]) -> int | None:
-            return NPMplusItemType.normalize_int(item.get("owner_user_id"))
-
         existing = client.list_proxy_hosts()
         by_domains = index_proxy_hosts_by_domains(existing)
 
@@ -724,7 +518,10 @@ class DockerSyncer:
         seen_domain_keys: set[tuple[str, ...]] = set()
         for spec in specs:
             key = _domain_key(spec.domain_names)
-            natural_index = _natural_index_for_spec(spec)
+            parts = [str(d).strip().lower() for d in (spec.domain_names or [])]
+            parts = [p for p in parts if p]
+            parts = sorted(set(parts))
+            natural_index = ",".join(parts)
             if key in seen_domain_keys:
                 logger.warning(
                     "Duplicate domain_names in docker specs; skipping container %s",
@@ -790,7 +587,7 @@ class DockerSyncer:
             if mode == "update" and takeownership:
                 assert existing_item is not None
                 assert obj_id is not None
-                existing_owner_id = _existing_owner_user_id(existing_item)
+                existing_owner_id = NPMplusItemType.normalize_int(existing_item.get("owner_user_id"))
 
                 if existing_owner_id is not None and existing_owner_id != effective_owner_id:
                     item = ProxyHostItem(dict(base_payload))
@@ -813,7 +610,7 @@ class DockerSyncer:
 
             if mode == "update":
                 assert existing_item is not None
-                if ProxyHostItem.are_equal(base_payload, existing_item):
+                if ProxyHostItem(base_payload).is_equal(existing_item):
                     assert obj_id is not None
                     logger.info(
                         "Synced %s %s (skip) id=%s from docker container=%s",
@@ -924,15 +721,6 @@ class DockerSyncer:
     ) -> None:
         """Create/update dead-hosts from docker label specs."""
 
-        def _natural_index_for_spec(spec: DockerDeadHostSpec) -> str:
-            parts = [str(d).strip().lower() for d in (spec.domain_names or [])]
-            parts = [p for p in parts if p]
-            parts = sorted(set(parts))
-            return ",".join(parts)
-
-        def _existing_owner_user_id(item: dict[str, Any]) -> int | None:
-            return NPMplusItemType.normalize_int(item.get("owner_user_id"))
-
         existing = client.list_dead_hosts()
         by_domains = index_dead_hosts_by_domains(existing)
 
@@ -948,7 +736,10 @@ class DockerSyncer:
         seen_domain_keys: set[tuple[str, ...]] = set()
         for spec in specs:
             key = _domain_key(spec.domain_names)
-            natural_index = _natural_index_for_spec(spec)
+            parts = [str(d).strip().lower() for d in (spec.domain_names or [])]
+            parts = [p for p in parts if p]
+            parts = sorted(set(parts))
+            natural_index = ",".join(parts)
             if key in seen_domain_keys:
                 logger.warning("Duplicate domain_names in docker specs; skipping container %s", spec.container_name)
                 continue
@@ -978,7 +769,7 @@ class DockerSyncer:
 
             if mode == "update" and takeownership:
                 assert existing_item is not None
-                existing_owner_id = _existing_owner_user_id(existing_item)
+                existing_owner_id = NPMplusItemType.normalize_int(existing_item.get("owner_user_id"))
                 if existing_owner_id is not None and existing_owner_id != effective_owner_id:
                     item = DeadHostItem(dict(base_payload))
                     item["id"] = obj_id
@@ -993,7 +784,7 @@ class DockerSyncer:
 
             if mode == "update":
                 assert existing_item is not None
-                if DeadHostItem.are_equal(base_payload, existing_item):
+                if DeadHostItem(base_payload).is_equal(existing_item):
                     logger.info(
                         "Synced dead-hosts %s (skip) id=%s from docker container=%s",
                         natural_index,
@@ -1082,15 +873,6 @@ class DockerSyncer:
     ) -> None:
         """Create/update redirection-hosts from docker label specs."""
 
-        def _natural_index_for_spec(spec: DockerRedirectionHostSpec) -> str:
-            parts = [str(d).strip().lower() for d in (spec.domain_names or [])]
-            parts = [p for p in parts if p]
-            parts = sorted(set(parts))
-            return ",".join(parts)
-
-        def _existing_owner_user_id(item: dict[str, Any]) -> int | None:
-            return NPMplusItemType.normalize_int(item.get("owner_user_id"))
-
         existing = client.list_redirection_hosts()
         by_domains = index_redirection_hosts_by_domains(existing)
 
@@ -1106,7 +888,10 @@ class DockerSyncer:
         seen_domain_keys: set[tuple[str, ...]] = set()
         for spec in specs:
             key = _domain_key(spec.domain_names)
-            natural_index = _natural_index_for_spec(spec)
+            parts = [str(d).strip().lower() for d in (spec.domain_names or [])]
+            parts = [p for p in parts if p]
+            parts = sorted(set(parts))
+            natural_index = ",".join(parts)
             if key in seen_domain_keys:
                 logger.warning("Duplicate domain_names in docker specs; skipping container %s", spec.container_name)
                 continue
@@ -1138,7 +923,7 @@ class DockerSyncer:
 
             if mode == "update" and takeownership:
                 assert existing_item is not None
-                existing_owner_id = _existing_owner_user_id(existing_item)
+                existing_owner_id = NPMplusItemType.normalize_int(existing_item.get("owner_user_id"))
                 if existing_owner_id is not None and existing_owner_id != effective_owner_id:
                     item = RedirectionHostItem(dict(base_payload))
                     item["id"] = obj_id
@@ -1153,7 +938,7 @@ class DockerSyncer:
 
             if mode == "update":
                 assert existing_item is not None
-                if RedirectionHostItem.are_equal(base_payload, existing_item):
+                if RedirectionHostItem(base_payload).is_equal(existing_item):
                     logger.info(
                         "Synced redirection-hosts %s (skip) id=%s from docker container=%s",
                         natural_index,
@@ -1242,9 +1027,6 @@ class DockerSyncer:
     ) -> None:
         """Create/update streams from docker label specs."""
 
-        def _existing_owner_user_id(item: dict[str, Any]) -> int | None:
-            return NPMplusItemType.normalize_int(item.get("owner_user_id"))
-
         existing = client.list_streams()
         by_port = index_streams_by_port(existing)
 
@@ -1292,7 +1074,7 @@ class DockerSyncer:
 
             if mode == "update" and takeownership:
                 assert existing_item is not None
-                existing_owner_id = _existing_owner_user_id(existing_item)
+                existing_owner_id = NPMplusItemType.normalize_int(existing_item.get("owner_user_id"))
                 if existing_owner_id is not None and existing_owner_id != effective_owner_id:
                     item = StreamItem(dict(base_payload))
                     item["id"] = obj_id
@@ -1307,7 +1089,7 @@ class DockerSyncer:
 
             if mode == "update":
                 assert existing_item is not None
-                if StreamItem.are_equal(base_payload, existing_item):
+                if StreamItem(base_payload).is_equal(existing_item):
                     logger.info(
                         "Synced streams %s (skip) id=%s from docker container=%s",
                         natural_index,

@@ -156,6 +156,110 @@ def save(
         logger.info("Done")
 
 
+@app.command("audit-log")
+def audit_log(
+    out: Path = typer.Option(
+        Path("audit.log"),
+        "--out",
+        "-o",
+        help="Output file path (plain text; each record may span multiple lines)",
+        show_default=True,
+    ),
+) -> None:
+    """Export NPMplus audit log to a plain text file."""
+
+    from datetime import datetime, timezone
+
+    local_tz = datetime.now().astimezone().tzinfo
+
+    def _format_created_on_local(value: object) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            dt = value
+        else:
+            s = str(value).strip()
+            if not s:
+                return None
+            try:
+                if s.endswith("Z"):
+                    s = s[:-1] + "+00:00"
+                dt = datetime.fromisoformat(s)
+            except Exception:
+                return str(value).strip() or None
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        dt_local = dt.astimezone(local_tz)
+        return dt_local.replace(microsecond=0).isoformat()
+
+    def _format_event(ev: dict[str, object]) -> str:
+        ts = _format_created_on_local(ev.get("created_on"))
+        action = ev.get("action")
+        object_type = ev.get("object_type")
+        user_ev = ev.get("user")
+        user = user_ev.get("nickname") if isinstance(user_ev, dict) else user_ev
+        meta = ev.get("meta")
+        header_parts: list[str] = []
+        if ts is not None and str(ts).strip():
+            header_parts.append(str(ts).strip())
+        if action is not None and str(action).strip():
+            header_parts.append(f"action={str(action).strip()}")
+        if object_type is not None and str(object_type).strip():
+            header_parts.append(f"type={str(object_type).strip()}")
+        if user is not None:
+            header_parts.append(f"user={user}")
+
+        header = " ".join(header_parts).rstrip()
+
+        meta_lines: list[str] = []
+        if isinstance(meta, dict):
+            for k in sorted(meta.keys()):
+                meta_lines.append(f"  {k}={meta.get(k)!r}")
+        elif meta is not None:
+            meta_lines.append(f"  meta={meta!r}")
+
+        if header or meta_lines:
+            if meta_lines:
+                return (header + "\n" + "\n".join(meta_lines)).rstrip()
+            return header
+
+        # Fallback: stable key=value format
+        return " ".join(f"{k}={ev.get(k)!r}" for k in sorted(ev.keys()))
+
+    with _client_context(readonly=True) as client:
+
+        def _event_sort_key(ev: dict[str, object]) -> tuple[datetime, int]:
+            ts = ev.get("created_on") or ev.get("created_at") or ev.get("createdAt") or ev.get("created")
+            dt = datetime.min.replace(tzinfo=timezone.utc)
+            if ts is not None:
+                s = str(ts).strip()
+                if s:
+                    try:
+                        if s.endswith("Z"):
+                            s = s[:-1] + "+00:00"
+                        dt = datetime.fromisoformat(s)
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                    except Exception:
+                        dt = datetime.min.replace(tzinfo=timezone.utc)
+
+            raw_id = ev.get("id")
+            try:
+                event_id = int(str(raw_id).strip()) if raw_id is not None else -1
+            except Exception:
+                event_id = -1
+
+            return dt, event_id
+
+        events = [ev for ev in client.list_audit_log() if isinstance(ev, dict)]
+        events.sort(key=_event_sort_key)
+        out_path = out.expanduser()
+        lines = [_format_event(ev) for ev in events]
+        out_path.write_text(("\n".join(lines) + ("\n" if lines else "")), encoding="utf-8")
+        logger.info("Saved audit log to %s", out_path)
+
+
 @app.command("schema")
 def schema(
     out: str = typer.Option(

@@ -1,4 +1,10 @@
 from npmp_cli import cli as _cli
+from npmp_cli.dockersyncer import (
+    DockerDeadHostSpec,
+    DockerProxyHostSpec,
+    DockerRedirectionHostSpec,
+    DockerStreamSpec,
+)
 from npmp_cli.npmplus_api import NPMplusApi
 
 _ = _cli._main
@@ -83,3 +89,21 @@ _ = NPMplusApi.validate_certificate_files
 _ = NPMplusApi.upload_certificate_files
 _ = NPMplusApi.renew_certificate
 _ = NPMplusApi.download_certificate
+
+# Dataclass fields that vulture cannot detect
+_ = DockerProxyHostSpec.hsts_enabled
+_ = DockerProxyHostSpec.hsts_subdomains
+_ = DockerProxyHostSpec.http2_support
+_ = DockerProxyHostSpec.ssl_forced
+_ = DockerDeadHostSpec.ssl_forced
+_ = DockerDeadHostSpec.hsts_enabled
+_ = DockerDeadHostSpec.hsts_subdomains
+_ = DockerDeadHostSpec.http2_support
+_ = DockerRedirectionHostSpec.preserve_path
+_ = DockerRedirectionHostSpec.ssl_forced
+_ = DockerRedirectionHostSpec.hsts_enabled
+_ = DockerRedirectionHostSpec.hsts_subdomains
+_ = DockerRedirectionHostSpec.http2_support
+_ = DockerStreamSpec.tcp_forwarding
+_ = DockerStreamSpec.udp_forwarding
+_ = DockerStreamSpec.proxy_protocol_forwarding

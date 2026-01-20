@@ -16,6 +16,7 @@ from .npmplus_api import (
     EXPAND_PROXY_HOSTS,
     EXPAND_REDIRECTION_HOSTS,
     EXPAND_STREAMS,
+    EXPAND_USER,
     NPMplusApi,
 )
 
@@ -132,14 +133,6 @@ class NPMplusItemType(dict[str, Any]):
         raise NotImplementedError(f"{type(self).__name__} does not implement load_from_json()")
 
     @staticmethod
-    def normalize_domains(value: object) -> tuple[str, ...] | None:
-        if not isinstance(value, list):
-            return None
-        parts = [str(v).strip().lower() for v in value]
-        parts = [p for p in parts if p]
-        return tuple(sorted(parts))
-
-    @staticmethod
     def normalize_int(value: object) -> int:
         if value is None:
             return -1
@@ -161,15 +154,29 @@ class NPMplusItemType(dict[str, Any]):
             return False
         return None
 
-    @classmethod
-    def are_equal(cls, desired: dict[str, Any], existing: dict[str, Any]) -> bool:
-        """Compare two dicts using only API_FIELDS.
+    def is_equal(self, other: dict[str, Any]) -> bool:
+        """Compare this item with another dict using only API_FIELDS.
 
-        Returns True if the dicts are equal for fields relevant to API.
+        Returns True if the items are equal for fields relevant to API.
+        Excludes "meta" field from comparison.
         """
-        desired_clean = {k: v for k, v in desired.items() if k in cls.API_FIELDS}
-        existing_clean = {k: v for k, v in existing.items() if k in cls.API_FIELDS}
-        return desired_clean == existing_clean
+        self_clean = {k: v for k, v in self.items() if k in self.API_FIELDS and k != "meta"}
+        other_clean = {k: v for k, v in other.items() if k in self.API_FIELDS and k != "meta"}
+
+        if self_clean == other_clean:
+            return True
+        """
+        all_fields = set(self_clean.keys()) | set(other_clean.keys())
+        diffs: list[str] = []
+        for field in sorted(all_fields):
+            self_val = self_clean.get(field)
+            other_val = other_clean.get(field)
+            if self_val != other_val:
+                diffs.append(f"{field}: {other_val!r} -> {self_val!r}")
+        if diffs:
+            logger.debug("Items not equal, differences: %s", ", ".join(diffs))
+        """
+        return False
 
 
 class UserItem(NPMplusItemType):
@@ -342,19 +349,6 @@ class StreamItem(NPMplusItemType):
         if self.get("proxy_protocol_forwarding"):
             parts.append("proxy")
         return "/".join(parts)
-
-    @staticmethod
-    def parse_natural_index(index: str) -> tuple[int, bool, bool, bool] | None:
-        """Parse natural index into (port, tcp, udp, proxy). Returns None if invalid."""
-        parts = [p.strip().lower() for p in index.split("/")]
-        if not parts or not parts[0]:
-            return None
-        try:
-            port = int(parts[0])
-        except ValueError:
-            return None
-        flags = set(parts[1:])
-        return (port, "tcp" in flags, "udp" in flags, "proxy" in flags)
 
     def load_from_json(
         self,
@@ -853,6 +847,15 @@ class NPMplusClient(NPMplusApi):
 
     def __enter__(self) -> NPMplusClient:
         return self
+
+    # Audit log
+
+    def list_audit_log(
+        self,
+        *,
+        query: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return super().list_audit_log(expand=(EXPAND_USER,), query=query)
 
     # Users
 

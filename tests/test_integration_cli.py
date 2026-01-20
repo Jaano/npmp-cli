@@ -62,6 +62,15 @@ def test_load_save_json_to_compose_roundtrip(npmplus_client: NPMplusClient, uniq
         result2 = runner.invoke(app, ["save", "--out", str(out_dir)])
         assert result2.exit_code == 0, result2.output
 
+        audit_result = runner.invoke(app, ["audit-log"])
+        assert audit_result.exit_code == 0, audit_result.output
+        audit_file = Path("audit.log")
+        assert audit_file.exists()
+        audit_content = audit_file.read_text(encoding="utf-8")
+        assert isinstance(audit_content, str)
+        if audit_content.strip():
+            assert not audit_content.lstrip().startswith(("[", "{"))
+
         saved = out_dir / f"proxy-hosts__{created_id}.json"
         assert saved.exists()
 
