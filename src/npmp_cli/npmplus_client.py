@@ -291,16 +291,16 @@ class AccessListItem(NPMplusItemType):
             effective_id = found_id if found_id > 0 else None
         if effective_id is None:
             result = api.create_access_list(self._payload_for_api())
-            logger.info("Created %s id=%s", self.kind.value, result.get("id"))
+            logger.info("Created %s (%s)", self.kind.value, self.natural_index)
             return "create", result
         try:
             result = api.update_access_list(effective_id, self._payload_for_api())
-            logger.info("Updated %s id=%s", self.kind.value, effective_id)
+            logger.info("Updated %s (%s)", self.kind.value, self.natural_index)
             return "update", result
         except RuntimeError as e:
             if "HTTP 404" in str(e) and "Not Found" in str(e):
                 result = api.create_access_list(self._payload_for_api())
-                logger.info("Created %s id=%s", self.kind.value, result.get("id"))
+                logger.info("Created %s (%s)", self.kind.value, self.natural_index)
                 return "create", result
             raise
 
@@ -385,8 +385,12 @@ class StreamItem(NPMplusItemType):
                 if owner_key and owner_key != api.my_natural_index:
                     replace = True
 
-        def _apply_enabled(stream_id: int | None) -> None:
+        def _apply_enabled(result: dict[str, Any]) -> None:
+            stream_id = result.get("id")
             if stream_id is None:
+                return
+            current_enabled = result.get("enabled")
+            if current_enabled == self.enabled:
                 return
             if self.enabled:
                 api.enable_stream(stream_id)
@@ -395,25 +399,25 @@ class StreamItem(NPMplusItemType):
 
         if effective_id is None:
             result = api.create_stream(self._payload_for_api())
-            logger.info("Created %s id=%s", self.kind.value, result.get("id"))
-            _apply_enabled(result.get("id"))
+            logger.info("Created %s (%s)", self.kind.value, self.natural_index)
+            _apply_enabled(result)
             return "create", result
         if replace:
             api.delete_stream(effective_id)
             result = api.create_stream(self._payload_for_api())
-            logger.info("Replaced %s id=%s", self.kind.value, result.get("id"))
-            _apply_enabled(result.get("id"))
+            logger.info("Replaced %s (%s)", self.kind.value, self.natural_index)
+            _apply_enabled(result)
             return "create", result
         try:
             result = api.update_stream(effective_id, self._payload_for_api())
-            logger.info("Updated %s id=%s", self.kind.value, effective_id)
-            _apply_enabled(effective_id)
+            logger.info("Updated %s (%s)", self.kind.value, self.natural_index)
+            _apply_enabled(result)
             return "update", result
         except RuntimeError as e:
             if "HTTP 404" in str(e) and "Not Found" in str(e):
                 result = api.create_stream(self._payload_for_api())
-                logger.info("Created %s id=%s", self.kind.value, result.get("id"))
-                _apply_enabled(result.get("id"))
+                logger.info("Created %s (%s)", self.kind.value, self.natural_index)
+                _apply_enabled(result)
                 return "create", result
             raise
 
@@ -538,8 +542,12 @@ class ProxyHostItem(NPMplusItemType):
                 if owner_key and owner_key != api.my_natural_index:
                     replace = True
 
-        def _apply_enabled(host_id: int | None) -> None:
+        def _apply_enabled(result: dict[str, Any]) -> None:
+            host_id = result.get("id")
             if host_id is None:
+                return
+            current_enabled = result.get("enabled")
+            if current_enabled == self.enabled:
                 return
             if self.enabled:
                 api.enable_proxy_host(host_id)
@@ -548,25 +556,25 @@ class ProxyHostItem(NPMplusItemType):
 
         if effective_id is None:
             result = api.create_proxy_host(self._payload_for_api())
-            logger.info("Created %s id=%s", self.kind.value, result.get("id"))
-            _apply_enabled(result.get("id"))
+            logger.info("Created %s (%s)", self.kind.value, self.natural_index)
+            _apply_enabled(result)
             return "create", result
         if replace:
             api.delete_proxy_host(effective_id)
             result = api.create_proxy_host(self._payload_for_api())
-            logger.info("Replaced %s id=%s", self.kind.value, result.get("id"))
-            _apply_enabled(result.get("id"))
+            logger.info("Replaced %s (%s)", self.kind.value, self.natural_index)
+            _apply_enabled(result)
             return "create", result
         try:
             result = api.update_proxy_host(effective_id, self._payload_for_api())
-            logger.info("Updated %s id=%s", self.kind.value, effective_id)
-            _apply_enabled(effective_id)
+            logger.info("Updated %s (%s)", self.kind.value, self.natural_index)
+            _apply_enabled(result)
             return "update", result
         except RuntimeError as e:
             if "HTTP 404" in str(e) and "Not Found" in str(e):
                 result = api.create_proxy_host(self._payload_for_api())
-                logger.info("Created %s id=%s", self.kind.value, result.get("id"))
-                _apply_enabled(result.get("id"))
+                logger.info("Created %s (%s)", self.kind.value, self.natural_index)
+                _apply_enabled(result)
                 return "create", result
             raise
 
@@ -647,8 +655,12 @@ class RedirectionHostItem(NPMplusItemType):
                 if owner_key and owner_key != api.my_natural_index:
                     replace = True
 
-        def _apply_enabled(host_id: int | None) -> None:
+        def _apply_enabled(result: dict[str, Any]) -> None:
+            host_id = result.get("id")
             if host_id is None:
+                return
+            current_enabled = result.get("enabled")
+            if current_enabled == self.enabled:
                 return
             if self.enabled:
                 api.enable_redirection_host(host_id)
@@ -657,25 +669,25 @@ class RedirectionHostItem(NPMplusItemType):
 
         if effective_id is None:
             result = api.create_redirection_host(self._payload_for_api())
-            logger.info("Created %s id=%s", self.kind.value, result.get("id"))
-            _apply_enabled(result.get("id"))
+            logger.info("Created %s (%s)", self.kind.value, self.natural_index)
+            _apply_enabled(result)
             return "create", result
         if replace:
             api.delete_redirection_host(effective_id)
             result = api.create_redirection_host(self._payload_for_api())
-            logger.info("Replaced %s id=%s", self.kind.value, result.get("id"))
-            _apply_enabled(result.get("id"))
+            logger.info("Replaced %s (%s)", self.kind.value, self.natural_index)
+            _apply_enabled(result)
             return "create", result
         try:
             result = api.update_redirection_host(effective_id, self._payload_for_api())
-            logger.info("Updated %s id=%s", self.kind.value, effective_id)
-            _apply_enabled(effective_id)
+            logger.info("Updated %s (%s)", self.kind.value, self.natural_index)
+            _apply_enabled(result)
             return "update", result
         except RuntimeError as e:
             if "HTTP 404" in str(e) and "Not Found" in str(e):
                 result = api.create_redirection_host(self._payload_for_api())
-                logger.info("Created %s id=%s", self.kind.value, result.get("id"))
-                _apply_enabled(result.get("id"))
+                logger.info("Created %s (%s)", self.kind.value, self.natural_index)
+                _apply_enabled(result)
                 return "create", result
             raise
 
@@ -751,8 +763,12 @@ class DeadHostItem(NPMplusItemType):
                 if owner_key and owner_key != api.my_natural_index:
                     replace = True
 
-        def _apply_enabled(host_id: int | None) -> None:
+        def _apply_enabled(result: dict[str, Any]) -> None:
+            host_id = result.get("id")
             if host_id is None:
+                return
+            current_enabled = result.get("enabled")
+            if current_enabled == self.enabled:
                 return
             if self.enabled:
                 api.enable_dead_host(host_id)
@@ -761,25 +777,25 @@ class DeadHostItem(NPMplusItemType):
 
         if effective_id is None:
             result = api.create_dead_host(self._payload_for_api())
-            logger.info("Created %s id=%s", self.kind.value, result.get("id"))
-            _apply_enabled(result.get("id"))
+            logger.info("Created %s (%s)", self.kind.value, self.natural_index)
+            _apply_enabled(result)
             return "create", result
         if replace:
             api.delete_dead_host(effective_id)
             result = api.create_dead_host(self._payload_for_api())
-            logger.info("Replaced %s id=%s", self.kind.value, result.get("id"))
-            _apply_enabled(result.get("id"))
+            logger.info("Replaced %s (%s)", self.kind.value, self.natural_index)
+            _apply_enabled(result)
             return "create", result
         try:
             result = api.update_dead_host(effective_id, self._payload_for_api())
-            logger.info("Updated %s id=%s", self.kind.value, effective_id)
-            _apply_enabled(effective_id)
+            logger.info("Updated %s (%s)", self.kind.value, self.natural_index)
+            _apply_enabled(result)
             return "update", result
         except RuntimeError as e:
             if "HTTP 404" in str(e) and "Not Found" in str(e):
                 result = api.create_dead_host(self._payload_for_api())
-                logger.info("Created %s id=%s", self.kind.value, result.get("id"))
-                _apply_enabled(result.get("id"))
+                logger.info("Created %s (%s)", self.kind.value, self.natural_index)
+                _apply_enabled(result)
                 return "create", result
             raise
 
@@ -1059,13 +1075,13 @@ class NPMplusClient(NPMplusApi):
         self._proxy_hosts_cache = None
         super().delete_proxy_host(host_id)
 
-    def enable_proxy_host(self, host_id: int | str) -> dict[str, Any]:
+    def enable_proxy_host(self, host_id: int | str) -> None:
         self._proxy_hosts_cache = None
-        return super().enable_proxy_host(host_id)
+        super().enable_proxy_host(host_id)
 
-    def disable_proxy_host(self, host_id: int | str) -> dict[str, Any]:
+    def disable_proxy_host(self, host_id: int | str) -> None:
         self._proxy_hosts_cache = None
-        return super().disable_proxy_host(host_id)
+        super().disable_proxy_host(host_id)
 
     def create_redirection_host(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._redirection_hosts_cache = None
@@ -1079,13 +1095,13 @@ class NPMplusClient(NPMplusApi):
         self._redirection_hosts_cache = None
         super().delete_redirection_host(host_id)
 
-    def enable_redirection_host(self, host_id: int | str) -> dict[str, Any]:
+    def enable_redirection_host(self, host_id: int | str) -> None:
         self._redirection_hosts_cache = None
-        return super().enable_redirection_host(host_id)
+        super().enable_redirection_host(host_id)
 
-    def disable_redirection_host(self, host_id: int | str) -> dict[str, Any]:
+    def disable_redirection_host(self, host_id: int | str) -> None:
         self._redirection_hosts_cache = None
-        return super().disable_redirection_host(host_id)
+        super().disable_redirection_host(host_id)
 
     def create_dead_host(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._dead_hosts_cache = None
@@ -1099,13 +1115,13 @@ class NPMplusClient(NPMplusApi):
         self._dead_hosts_cache = None
         super().delete_dead_host(host_id)
 
-    def enable_dead_host(self, host_id: int | str) -> dict[str, Any]:
+    def enable_dead_host(self, host_id: int | str) -> None:
         self._dead_hosts_cache = None
-        return super().enable_dead_host(host_id)
+        super().enable_dead_host(host_id)
 
-    def disable_dead_host(self, host_id: int | str) -> dict[str, Any]:
+    def disable_dead_host(self, host_id: int | str) -> None:
         self._dead_hosts_cache = None
-        return super().disable_dead_host(host_id)
+        super().disable_dead_host(host_id)
 
     def create_stream(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._streams_cache = None
@@ -1119,12 +1135,12 @@ class NPMplusClient(NPMplusApi):
         self._streams_cache = None
         super().delete_stream(stream_id)
 
-    def enable_stream(self, stream_id: int | str) -> dict[str, Any]:
+    def enable_stream(self, stream_id: int | str) -> None:
         self._streams_cache = None
-        return super().enable_stream(stream_id)
+        super().enable_stream(stream_id)
 
-    def disable_stream(self, stream_id: int | str) -> dict[str, Any]:
+    def disable_stream(self, stream_id: int | str) -> None:
         self._streams_cache = None
-        return super().disable_stream(stream_id)
+        super().disable_stream(stream_id)
 
 

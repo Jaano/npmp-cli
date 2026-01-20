@@ -518,17 +518,17 @@ class NPMplusApi:
             raise PermissionError(f"Unauthorized ({resp.status_code}) for DELETE nginx/proxy-hosts/{host_id}")
         self._raise_for_status(resp)
 
-    def enable_proxy_host(self, host_id: int | str) -> dict[str, Any]:
+    def enable_proxy_host(self, host_id: int | str) -> None:
         if self.readonly:
             logger.info("[dry-run] enable_proxy_host id=%s", host_id)
-            return {"id": host_id, "enabled": True}
-        return self._post_object(f"nginx/proxy-hosts/{host_id}/enable")
+            return
+        self._post_bool(f"nginx/proxy-hosts/{host_id}/enable")
 
-    def disable_proxy_host(self, host_id: int | str) -> dict[str, Any]:
+    def disable_proxy_host(self, host_id: int | str) -> None:
         if self.readonly:
             logger.info("[dry-run] disable_proxy_host id=%s", host_id)
-            return {"id": host_id, "enabled": False}
-        return self._post_object(f"nginx/proxy-hosts/{host_id}/disable")
+            return
+        self._post_bool(f"nginx/proxy-hosts/{host_id}/disable")
 
     def create_redirection_host(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self.readonly:
@@ -552,17 +552,17 @@ class NPMplusApi:
             raise PermissionError(f"Unauthorized ({resp.status_code}) for DELETE nginx/redirection-hosts/{host_id}")
         self._raise_for_status(resp)
 
-    def enable_redirection_host(self, host_id: int | str) -> dict[str, Any]:
+    def enable_redirection_host(self, host_id: int | str) -> None:
         if self.readonly:
             logger.info("[dry-run] enable_redirection_host id=%s", host_id)
-            return {"id": host_id, "enabled": True}
-        return self._post_object(f"nginx/redirection-hosts/{host_id}/enable")
+            return
+        self._post_bool(f"nginx/redirection-hosts/{host_id}/enable")
 
-    def disable_redirection_host(self, host_id: int | str) -> dict[str, Any]:
+    def disable_redirection_host(self, host_id: int | str) -> None:
         if self.readonly:
             logger.info("[dry-run] disable_redirection_host id=%s", host_id)
-            return {"id": host_id, "enabled": False}
-        return self._post_object(f"nginx/redirection-hosts/{host_id}/disable")
+            return
+        self._post_bool(f"nginx/redirection-hosts/{host_id}/disable")
 
     def create_dead_host(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self.readonly:
@@ -586,17 +586,17 @@ class NPMplusApi:
             raise PermissionError(f"Unauthorized ({resp.status_code}) for DELETE nginx/dead-hosts/{host_id}")
         self._raise_for_status(resp)
 
-    def enable_dead_host(self, host_id: int | str) -> dict[str, Any]:
+    def enable_dead_host(self, host_id: int | str) -> None:
         if self.readonly:
             logger.info("[dry-run] enable_dead_host id=%s", host_id)
-            return {"id": host_id, "enabled": True}
-        return self._post_object(f"nginx/dead-hosts/{host_id}/enable")
+            return
+        self._post_bool(f"nginx/dead-hosts/{host_id}/enable")
 
-    def disable_dead_host(self, host_id: int | str) -> dict[str, Any]:
+    def disable_dead_host(self, host_id: int | str) -> None:
         if self.readonly:
             logger.info("[dry-run] disable_dead_host id=%s", host_id)
-            return {"id": host_id, "enabled": False}
-        return self._post_object(f"nginx/dead-hosts/{host_id}/disable")
+            return
+        self._post_bool(f"nginx/dead-hosts/{host_id}/disable")
 
     def create_stream(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self.readonly:
@@ -620,17 +620,17 @@ class NPMplusApi:
             raise PermissionError(f"Unauthorized ({resp.status_code}) for DELETE nginx/streams/{stream_id}")
         self._raise_for_status(resp)
 
-    def enable_stream(self, stream_id: int | str) -> dict[str, Any]:
+    def enable_stream(self, stream_id: int | str) -> None:
         if self.readonly:
             logger.info("[dry-run] enable_stream id=%s", stream_id)
-            return {"id": stream_id, "enabled": True}
-        return self._post_object(f"nginx/streams/{stream_id}/enable")
+            return
+        self._post_bool(f"nginx/streams/{stream_id}/enable")
 
-    def disable_stream(self, stream_id: int | str) -> dict[str, Any]:
+    def disable_stream(self, stream_id: int | str) -> None:
         if self.readonly:
             logger.info("[dry-run] disable_stream id=%s", stream_id)
-            return {"id": stream_id, "enabled": False}
-        return self._post_object(f"nginx/streams/{stream_id}/disable")
+            return
+        self._post_bool(f"nginx/streams/{stream_id}/disable")
 
     # --- Internal helpers ---
     def _get_object(self, path: str, *, expand: Sequence[str] | None) -> dict[str, Any]:
@@ -665,6 +665,19 @@ class NPMplusApi:
         if not isinstance(data, dict):
             raise RuntimeError(f"Expected object response from POST {path}, got {type(data).__name__}")
         return data
+
+    def _post_bool(self, path: str) -> bool:
+        logger.debug("POST %s", path)
+        resp = self._web_request("POST", path)
+        if resp.status_code in (401, 403):
+            raise PermissionError(f"Unauthorized ({resp.status_code}) for POST {path}")
+        self._raise_for_status(resp)
+        data = resp.json()
+        if isinstance(data, bool):
+            return data
+        if isinstance(data, dict):
+            return True
+        raise RuntimeError(f"Expected bool response from POST {path}, got {type(data).__name__}")
 
     def _delete_object(self, path: str) -> dict[str, Any]:
         logger.debug("DELETE %s", path)

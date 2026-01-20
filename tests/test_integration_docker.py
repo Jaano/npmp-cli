@@ -48,8 +48,7 @@ def test_scan_and_sync(require_docker: bool, npmplus_client: NPMplusClient, uniq
         spec = next((s for s in specs if domain in (s.domain_names or [])), None)
         assert spec is not None
 
-        created, updated, skipped = DockerSyncer.sync_docker_proxy_hosts(client=npmplus_client, specs=[spec])
-        assert (created, updated, skipped) != (0, 0, 0)
+        DockerSyncer.sync_docker_proxy_hosts(client=npmplus_client, specs=[spec])
 
         items = npmplus_client.list_proxy_hosts()
         found = None

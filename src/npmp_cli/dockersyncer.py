@@ -690,7 +690,7 @@ class DockerSyncer:
         takeownership: bool = False,
         disable_orphans: bool = False,
         delete_orphans: bool = False,
-    ) -> tuple[int, int, int]:
+    ) -> None:
         """Create/update proxy-hosts from docker label specs.
 
         If disable_orphans is True, proxy-hosts owned by the current user but not present
@@ -698,8 +698,6 @@ class DockerSyncer:
 
         If delete_orphans is True, proxy-hosts owned by the current user but not present
         in docker specs will be deleted.
-
-        Returns (created, updated, skipped).
         """
 
         def _natural_index_for_spec(spec: DockerProxyHostSpec) -> str:
@@ -723,11 +721,6 @@ class DockerSyncer:
         if takeownership and effective_owner_id is None:
             raise ValueError("--takeownership requires determining current user_id (ensure /api/users/me works)")
 
-        created = 0
-        updated = 0
-        skipped = 0
-        disabled = 0
-
         seen_domain_keys: set[tuple[str, ...]] = set()
         for spec in specs:
             key = _domain_key(spec.domain_names)
@@ -744,7 +737,6 @@ class DockerSyncer:
                     None,
                     spec.container_name,
                 )
-                skipped += 1
                 continue
             seen_domain_keys.add(key)
 
@@ -793,7 +785,6 @@ class DockerSyncer:
                     None,
                     spec.container_name,
                 )
-                skipped += 1
                 continue
 
             if mode == "update" and takeownership:
@@ -805,7 +796,6 @@ class DockerSyncer:
                     item = ProxyHostItem(dict(base_payload))
                     item["id"] = obj_id
                     _mode, result = item.set(client, takeownership=True)
-                    created += 1
                     logger.info(
                         "Synced %s %s (create) id=%s from docker container=%s",
                         "proxy-hosts",
@@ -832,13 +822,11 @@ class DockerSyncer:
                         obj_id,
                         spec.container_name,
                     )
-                    skipped += 1
                     continue
 
             if mode == "create":
                 item = ProxyHostItem(data=dict(base_payload))
                 _mode, result = item.set(client)
-                created += 1
                 logger.info(
                     "Synced %s %s (create) id=%s from docker container=%s",
                     "proxy-hosts",
@@ -852,7 +840,6 @@ class DockerSyncer:
                 item = ProxyHostItem(dict(base_payload))
                 item["id"] = host_id
                 _mode, result = item.set(client)
-                updated += 1
                 logger.info(
                     "Synced %s %s (update) id=%s from docker container=%s",
                     "proxy-hosts",
@@ -865,6 +852,10 @@ class DockerSyncer:
             if effective_owner_id is None:
                 logger.warning(
                     "disable_orphans requested but could not determine authenticated owner_user_id; skipping orphan disable"
+                )
+            elif not seen_domain_keys:
+                logger.warning(
+                    "disable_orphans requested but no proxy-host specs provided; skipping orphan disable"
                 )
             else:
                 orphans = find_orphan_proxy_hosts(
@@ -884,25 +875,19 @@ class DockerSyncer:
                         continue
                     if item.get("enabled") is False:
                         continue
-                    proxy_item = ProxyHostItem(data={"enabled": False, "id": host_id})
-                    _mode, result = proxy_item.set(client)
-                    disabled += 1
-                    logger.info(
-                        "Docker sync: disabled orphan proxy-host id=%s domains=%s",
-                        result.get("id") if isinstance(result, dict) else host_id,
-                        item.get("domain_names") or item.get("domainNames"),
-                    )
-
-                logger.info(
-                    "Disabled %s orphan proxy-host(s) for owner_user_id=%s",
-                    disabled,
-                    effective_owner_id,
-                )
+                    client.disable_proxy_host(host_id)
+                    domains = item.get("domain_names") or item.get("domainNames") or []
+                    natural_index = ",".join(str(d) for d in domains) if domains else f"id={host_id}"
+                    logger.info("Docker sync: disabled orphan proxy-host (%s)", natural_index)
 
         if delete_orphans:
             if effective_owner_id is None:
                 logger.warning(
                     "delete_orphans requested but could not determine authenticated owner_user_id; skipping orphan deletion"
+                )
+            elif not seen_domain_keys:
+                logger.warning(
+                    "delete_orphans requested but no proxy-host specs provided; skipping orphan deletion"
                 )
             else:
                 orphans = find_orphan_proxy_hosts(
@@ -910,7 +895,6 @@ class DockerSyncer:
                     managed_domain_keys=seen_domain_keys,
                     owner_user_id=effective_owner_id,
                 )
-                deleted = 0
                 for item in orphans:
                     item_id = item.get("id")
                     try:
@@ -927,15 +911,6 @@ class DockerSyncer:
                         host_id,
                         item.get("domain_names") or item.get("domainNames"),
                     )
-                    deleted += 1
-
-                logger.info(
-                    "Deleted %s orphan proxy-host(s) for owner_user_id=%s",
-                    deleted,
-                    effective_owner_id,
-                )
-
-        return created, updated, skipped
 
     @classmethod
     def sync_docker_dead_hosts(
@@ -946,11 +921,8 @@ class DockerSyncer:
         takeownership: bool = False,
         disable_orphans: bool = False,
         delete_orphans: bool = False,
-    ) -> tuple[int, int, int]:
-        """Create/update dead-hosts from docker label specs.
-
-        Returns (created, updated, skipped).
-        """
+    ) -> None:
+        """Create/update dead-hosts from docker label specs."""
 
         def _natural_index_for_spec(spec: DockerDeadHostSpec) -> str:
             parts = [str(d).strip().lower() for d in (spec.domain_names or [])]
@@ -973,18 +945,12 @@ class DockerSyncer:
         if takeownership and effective_owner_id is None:
             raise ValueError("--takeownership requires determining current user_id")
 
-        created = 0
-        updated = 0
-        skipped = 0
-        disabled = 0
-
         seen_domain_keys: set[tuple[str, ...]] = set()
         for spec in specs:
             key = _domain_key(spec.domain_names)
             natural_index = _natural_index_for_spec(spec)
             if key in seen_domain_keys:
                 logger.warning("Duplicate domain_names in docker specs; skipping container %s", spec.container_name)
-                skipped += 1
                 continue
             seen_domain_keys.add(key)
 
@@ -1008,7 +974,6 @@ class DockerSyncer:
                     obj_id = None
             if mode == "update" and obj_id is None:
                 logger.warning("Existing dead-host matched domains but has no id; skipping domains=%s", list(key))
-                skipped += 1
                 continue
 
             if mode == "update" and takeownership:
@@ -1018,7 +983,6 @@ class DockerSyncer:
                     item = DeadHostItem(dict(base_payload))
                     item["id"] = obj_id
                     _mode, result = item.set(client, takeownership=True)
-                    created += 1
                     logger.info(
                         "Synced dead-hosts %s (create) id=%s from docker container=%s",
                         natural_index,
@@ -1036,13 +1000,11 @@ class DockerSyncer:
                         obj_id,
                         spec.container_name,
                     )
-                    skipped += 1
                     continue
 
             if mode == "create":
                 item = DeadHostItem(data=dict(base_payload))
                 _mode, result = item.set(client)
-                created += 1
                 logger.info(
                     "Synced dead-hosts %s (create) id=%s from docker container=%s",
                     natural_index,
@@ -1053,7 +1015,6 @@ class DockerSyncer:
                 item = DeadHostItem(dict(base_payload))
                 item["id"] = obj_id
                 _mode, result = item.set(client)
-                updated += 1
                 logger.info(
                     "Synced dead-hosts %s (update) id=%s from docker container=%s",
                     natural_index,
@@ -1062,52 +1023,52 @@ class DockerSyncer:
                 )
 
         if disable_orphans and effective_owner_id is not None:
-            orphans = find_orphan_dead_hosts(
-                existing_items=existing,
-                managed_domain_keys=seen_domain_keys,
-                owner_user_id=effective_owner_id,
-            )
-            for item in orphans:
-                item_id = item.get("id")
-                try:
-                    host_id = int(str(item_id).strip())
-                except Exception:
-                    continue
-                if item.get("enabled") is False:
-                    continue
-                dead_item = DeadHostItem(data={"enabled": False, "id": host_id})
-                _mode, result = dead_item.set(client)
-                disabled += 1
-                logger.info(
-                    "Docker sync: disabled orphan dead-host id=%s domains=%s",
-                    host_id,
-                    item.get("domain_names") or item.get("domainNames"),
+            if not seen_domain_keys:
+                logger.warning(
+                    "disable_orphans requested but no dead-host specs provided; skipping orphan disable"
                 )
-            logger.info("Disabled %s orphan dead-host(s) for owner_user_id=%s", disabled, effective_owner_id)
+            else:
+                orphans = find_orphan_dead_hosts(
+                    existing_items=existing,
+                    managed_domain_keys=seen_domain_keys,
+                    owner_user_id=effective_owner_id,
+                )
+                for item in orphans:
+                    item_id = item.get("id")
+                    try:
+                        host_id = int(str(item_id).strip())
+                    except Exception:
+                        continue
+                    if item.get("enabled") is False:
+                        continue
+                    client.disable_dead_host(host_id)
+                    domains = item.get("domain_names") or item.get("domainNames") or []
+                    natural_index = ",".join(str(d) for d in domains) if domains else f"id={host_id}"
+                    logger.info("Docker sync: disabled orphan dead-host (%s)", natural_index)
 
         if delete_orphans and effective_owner_id is not None:
-            orphans = find_orphan_dead_hosts(
-                existing_items=existing,
-                managed_domain_keys=seen_domain_keys,
-                owner_user_id=effective_owner_id,
-            )
-            deleted = 0
-            for item in orphans:
-                item_id = item.get("id")
-                try:
-                    host_id = int(str(item_id).strip())
-                except Exception:
-                    continue
-                client.delete_dead_host(host_id)
-                logger.info(
-                    "Docker sync: deleted orphan dead-host id=%s domains=%s",
-                    host_id,
-                    item.get("domain_names") or item.get("domainNames"),
+            if not seen_domain_keys:
+                logger.warning(
+                    "delete_orphans requested but no dead-host specs provided; skipping orphan deletion"
                 )
-                deleted += 1
-            logger.info("Deleted %s orphan dead-host(s) for owner_user_id=%s", deleted, effective_owner_id)
-
-        return created, updated, skipped
+            else:
+                orphans = find_orphan_dead_hosts(
+                    existing_items=existing,
+                    managed_domain_keys=seen_domain_keys,
+                    owner_user_id=effective_owner_id,
+                )
+                for item in orphans:
+                    item_id = item.get("id")
+                    try:
+                        host_id = int(str(item_id).strip())
+                    except Exception:
+                        continue
+                    client.delete_dead_host(host_id)
+                    logger.info(
+                        "Docker sync: deleted orphan dead-host id=%s domains=%s",
+                        host_id,
+                        item.get("domain_names") or item.get("domainNames"),
+                    )
 
     @classmethod
     def sync_docker_redirection_hosts(
@@ -1118,11 +1079,8 @@ class DockerSyncer:
         takeownership: bool = False,
         disable_orphans: bool = False,
         delete_orphans: bool = False,
-    ) -> tuple[int, int, int]:
-        """Create/update redirection-hosts from docker label specs.
-
-        Returns (created, updated, skipped).
-        """
+    ) -> None:
+        """Create/update redirection-hosts from docker label specs."""
 
         def _natural_index_for_spec(spec: DockerRedirectionHostSpec) -> str:
             parts = [str(d).strip().lower() for d in (spec.domain_names or [])]
@@ -1145,18 +1103,12 @@ class DockerSyncer:
         if takeownership and effective_owner_id is None:
             raise ValueError("--takeownership requires determining current user_id")
 
-        created = 0
-        updated = 0
-        skipped = 0
-        disabled = 0
-
         seen_domain_keys: set[tuple[str, ...]] = set()
         for spec in specs:
             key = _domain_key(spec.domain_names)
             natural_index = _natural_index_for_spec(spec)
             if key in seen_domain_keys:
                 logger.warning("Duplicate domain_names in docker specs; skipping container %s", spec.container_name)
-                skipped += 1
                 continue
             seen_domain_keys.add(key)
 
@@ -1182,7 +1134,6 @@ class DockerSyncer:
                 logger.warning(
                     "Existing redirection-host matched domains but has no id; skipping domains=%s", list(key)
                 )
-                skipped += 1
                 continue
 
             if mode == "update" and takeownership:
@@ -1192,7 +1143,6 @@ class DockerSyncer:
                     item = RedirectionHostItem(dict(base_payload))
                     item["id"] = obj_id
                     _mode, result = item.set(client, takeownership=True)
-                    created += 1
                     logger.info(
                         "Synced redirection-hosts %s (create) id=%s from docker container=%s",
                         natural_index,
@@ -1210,13 +1160,11 @@ class DockerSyncer:
                         obj_id,
                         spec.container_name,
                     )
-                    skipped += 1
                     continue
 
             if mode == "create":
                 item = RedirectionHostItem(data=dict(base_payload))
                 _mode, result = item.set(client)
-                created += 1
                 logger.info(
                     "Synced redirection-hosts %s (create) id=%s from docker container=%s",
                     natural_index,
@@ -1227,7 +1175,6 @@ class DockerSyncer:
                 item = RedirectionHostItem(dict(base_payload))
                 item["id"] = obj_id
                 _mode, result = item.set(client)
-                updated += 1
                 logger.info(
                     "Synced redirection-hosts %s (update) id=%s from docker container=%s",
                     natural_index,
@@ -1236,52 +1183,52 @@ class DockerSyncer:
                 )
 
         if disable_orphans and effective_owner_id is not None:
-            orphans = find_orphan_redirection_hosts(
-                existing_items=existing,
-                managed_domain_keys=seen_domain_keys,
-                owner_user_id=effective_owner_id,
-            )
-            for item in orphans:
-                item_id = item.get("id")
-                try:
-                    host_id = int(str(item_id).strip())
-                except Exception:
-                    continue
-                if item.get("enabled") is False:
-                    continue
-                redir_item = RedirectionHostItem(data={"enabled": False, "id": host_id})
-                _mode, result = redir_item.set(client)
-                disabled += 1
-                logger.info(
-                    "Docker sync: disabled orphan redirection-host id=%s domains=%s",
-                    host_id,
-                    item.get("domain_names") or item.get("domainNames"),
+            if not seen_domain_keys:
+                logger.warning(
+                    "disable_orphans requested but no redirection-host specs provided; skipping orphan disable"
                 )
-            logger.info("Disabled %s orphan redirection-host(s) for owner_user_id=%s", disabled, effective_owner_id)
+            else:
+                orphans = find_orphan_redirection_hosts(
+                    existing_items=existing,
+                    managed_domain_keys=seen_domain_keys,
+                    owner_user_id=effective_owner_id,
+                )
+                for item in orphans:
+                    item_id = item.get("id")
+                    try:
+                        host_id = int(str(item_id).strip())
+                    except Exception:
+                        continue
+                    if item.get("enabled") is False:
+                        continue
+                    client.disable_redirection_host(host_id)
+                    domains = item.get("domain_names") or item.get("domainNames") or []
+                    natural_index = ",".join(str(d) for d in domains) if domains else f"id={host_id}"
+                    logger.info("Docker sync: disabled orphan redirection-host (%s)", natural_index)
 
         if delete_orphans and effective_owner_id is not None:
-            orphans = find_orphan_redirection_hosts(
-                existing_items=existing,
-                managed_domain_keys=seen_domain_keys,
-                owner_user_id=effective_owner_id,
-            )
-            deleted = 0
-            for item in orphans:
-                item_id = item.get("id")
-                try:
-                    host_id = int(str(item_id).strip())
-                except Exception:
-                    continue
-                client.delete_redirection_host(host_id)
-                logger.info(
-                    "Docker sync: deleted orphan redirection-host id=%s domains=%s",
-                    host_id,
-                    item.get("domain_names") or item.get("domainNames"),
+            if not seen_domain_keys:
+                logger.warning(
+                    "delete_orphans requested but no redirection-host specs provided; skipping orphan deletion"
                 )
-                deleted += 1
-            logger.info("Deleted %s orphan redirection-host(s) for owner_user_id=%s", deleted, effective_owner_id)
-
-        return created, updated, skipped
+            else:
+                orphans = find_orphan_redirection_hosts(
+                    existing_items=existing,
+                    managed_domain_keys=seen_domain_keys,
+                    owner_user_id=effective_owner_id,
+                )
+                for item in orphans:
+                    item_id = item.get("id")
+                    try:
+                        host_id = int(str(item_id).strip())
+                    except Exception:
+                        continue
+                    client.delete_redirection_host(host_id)
+                    logger.info(
+                        "Docker sync: deleted orphan redirection-host id=%s domains=%s",
+                        host_id,
+                        item.get("domain_names") or item.get("domainNames"),
+                    )
 
     @classmethod
     def sync_docker_streams(
@@ -1292,11 +1239,8 @@ class DockerSyncer:
         takeownership: bool = False,
         disable_orphans: bool = False,
         delete_orphans: bool = False,
-    ) -> tuple[int, int, int]:
-        """Create/update streams from docker label specs.
-
-        Returns (created, updated, skipped).
-        """
+    ) -> None:
+        """Create/update streams from docker label specs."""
 
         def _existing_owner_user_id(item: dict[str, Any]) -> int | None:
             return NPMplusItemType.normalize_int(item.get("owner_user_id"))
@@ -1313,11 +1257,6 @@ class DockerSyncer:
         if takeownership and effective_owner_id is None:
             raise ValueError("--takeownership requires determining current user_id")
 
-        created = 0
-        updated = 0
-        skipped = 0
-        disabled = 0
-
         seen_port_keys: set[int] = set()
         for spec in specs:
             port_key = spec.incoming_port
@@ -1326,7 +1265,6 @@ class DockerSyncer:
                 logger.warning(
                     "Duplicate incoming_port in docker specs; skipping container %s", spec.container_name
                 )
-                skipped += 1
                 continue
             seen_port_keys.add(port_key)
 
@@ -1350,7 +1288,6 @@ class DockerSyncer:
                     obj_id = None
             if mode == "update" and obj_id is None:
                 logger.warning("Existing stream matched port but has no id; skipping incoming_port=%s", port_key)
-                skipped += 1
                 continue
 
             if mode == "update" and takeownership:
@@ -1360,7 +1297,6 @@ class DockerSyncer:
                     item = StreamItem(dict(base_payload))
                     item["id"] = obj_id
                     _mode, result = item.set(client, takeownership=True)
-                    created += 1
                     logger.info(
                         "Synced streams %s (create) id=%s from docker container=%s",
                         natural_index,
@@ -1378,13 +1314,11 @@ class DockerSyncer:
                         obj_id,
                         spec.container_name,
                     )
-                    skipped += 1
                     continue
 
             if mode == "create":
                 item = StreamItem(data=dict(base_payload))
                 _mode, result = item.set(client)
-                created += 1
                 logger.info(
                     "Synced streams %s (create) id=%s from docker container=%s",
                     natural_index,
@@ -1395,7 +1329,6 @@ class DockerSyncer:
                 item = StreamItem(dict(base_payload))
                 item["id"] = obj_id
                 _mode, result = item.set(client)
-                updated += 1
                 logger.info(
                     "Synced streams %s (update) id=%s from docker container=%s",
                     natural_index,
@@ -1404,52 +1337,52 @@ class DockerSyncer:
                 )
 
         if disable_orphans and effective_owner_id is not None:
-            orphans = find_orphan_streams(
-                existing_items=existing,
-                managed_port_keys=seen_port_keys,
-                owner_user_id=effective_owner_id,
-            )
-            for item in orphans:
-                item_id = item.get("id")
-                try:
-                    stream_id = int(str(item_id).strip())
-                except Exception:
-                    continue
-                if item.get("enabled") is False:
-                    continue
-                stream_item = StreamItem(data={"enabled": False, "id": stream_id})
-                _mode, result = stream_item.set(client)
-                disabled += 1
-                logger.info(
-                    "Docker sync: disabled orphan stream id=%s incoming_port=%s",
-                    stream_id,
-                    item.get("incoming_port") or item.get("incomingPort"),
+            if not seen_port_keys:
+                logger.warning(
+                    "disable_orphans requested but no stream specs provided; skipping orphan disable"
                 )
-            logger.info("Disabled %s orphan stream(s) for owner_user_id=%s", disabled, effective_owner_id)
+            else:
+                orphans = find_orphan_streams(
+                    existing_items=existing,
+                    managed_port_keys=seen_port_keys,
+                    owner_user_id=effective_owner_id,
+                )
+                for item in orphans:
+                    item_id = item.get("id")
+                    try:
+                        stream_id = int(str(item_id).strip())
+                    except Exception:
+                        continue
+                    if item.get("enabled") is False:
+                        continue
+                    client.disable_stream(stream_id)
+                    incoming_port = item.get("incoming_port") or item.get("incomingPort")
+                    natural_index = str(incoming_port) if incoming_port else f"id={stream_id}"
+                    logger.info("Docker sync: disabled orphan stream (%s)", natural_index)
 
         if delete_orphans and effective_owner_id is not None:
-            orphans = find_orphan_streams(
-                existing_items=existing,
-                managed_port_keys=seen_port_keys,
-                owner_user_id=effective_owner_id,
-            )
-            deleted = 0
-            for item in orphans:
-                item_id = item.get("id")
-                try:
-                    stream_id = int(str(item_id).strip())
-                except Exception:
-                    continue
-                client.delete_stream(stream_id)
-                logger.info(
-                    "Docker sync: deleted orphan stream id=%s incoming_port=%s",
-                    stream_id,
-                    item.get("incoming_port") or item.get("incomingPort"),
+            if not seen_port_keys:
+                logger.warning(
+                    "delete_orphans requested but no stream specs provided; skipping orphan deletion"
                 )
-                deleted += 1
-            logger.info("Deleted %s orphan stream(s) for owner_user_id=%s", deleted, effective_owner_id)
-
-        return created, updated, skipped
+            else:
+                orphans = find_orphan_streams(
+                    existing_items=existing,
+                    managed_port_keys=seen_port_keys,
+                    owner_user_id=effective_owner_id,
+                )
+                for item in orphans:
+                    item_id = item.get("id")
+                    try:
+                        stream_id = int(str(item_id).strip())
+                    except Exception:
+                        continue
+                    client.delete_stream(stream_id)
+                    logger.info(
+                        "Docker sync: deleted orphan stream id=%s incoming_port=%s",
+                        stream_id,
+                        item.get("incoming_port") or item.get("incomingPort"),
+                    )
 
 
 class ProxyHostFields:

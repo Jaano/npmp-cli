@@ -255,72 +255,45 @@ def sync_docker(
         return
 
     with _client_context(readonly=dry_run) as client:
-        total_created = 0
-        total_updated = 0
-        total_skipped = 0
-
         try:
             if proxy_specs or disable_orphans or delete_orphans:
-                created, updated, skipped = DockerSyncer.sync_docker_proxy_hosts(
+                DockerSyncer.sync_docker_proxy_hosts(
                     client=client,
                     specs=proxy_specs,
                     takeownership=takeownership,
                     disable_orphans=disable_orphans,
                     delete_orphans=delete_orphans,
                 )
-                total_created += created
-                total_updated += updated
-                total_skipped += skipped
-                logger.info("proxy-hosts: created=%d updated=%d skipped=%d", created, updated, skipped)
 
             if dead_specs or disable_orphans or delete_orphans:
-                created, updated, skipped = DockerSyncer.sync_docker_dead_hosts(
+                DockerSyncer.sync_docker_dead_hosts(
                     client=client,
                     specs=dead_specs,
                     takeownership=takeownership,
                     disable_orphans=disable_orphans,
                     delete_orphans=delete_orphans,
                 )
-                total_created += created
-                total_updated += updated
-                total_skipped += skipped
-                logger.info("dead-hosts: created=%d updated=%d skipped=%d", created, updated, skipped)
 
             if redirect_specs or disable_orphans or delete_orphans:
-                created, updated, skipped = DockerSyncer.sync_docker_redirection_hosts(
+                DockerSyncer.sync_docker_redirection_hosts(
                     client=client,
                     specs=redirect_specs,
                     takeownership=takeownership,
                     disable_orphans=disable_orphans,
                     delete_orphans=delete_orphans,
                 )
-                total_created += created
-                total_updated += updated
-                total_skipped += skipped
-                logger.info("redirection-hosts: created=%d updated=%d skipped=%d", created, updated, skipped)
 
             if stream_specs or disable_orphans or delete_orphans:
-                created, updated, skipped = DockerSyncer.sync_docker_streams(
+                DockerSyncer.sync_docker_streams(
                     client=client,
                     specs=stream_specs,
                     takeownership=takeownership,
                     disable_orphans=disable_orphans,
                     delete_orphans=delete_orphans,
                 )
-                total_created += created
-                total_updated += updated
-                total_skipped += skipped
-                logger.info("streams: created=%d updated=%d skipped=%d", created, updated, skipped)
 
         except ValueError as e:
             raise typer.BadParameter(str(e)) from None
-
-    logger.info(
-        "Docker sync complete: total_created=%d total_updated=%d total_skipped=%d",
-        total_created,
-        total_updated,
-        total_skipped,
-    )
 
 
 @app.command("json-to-compose")
