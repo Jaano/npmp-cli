@@ -82,7 +82,7 @@ npmp-cli json-to-compose ./npmp-config/proxy-hosts__62.json
 
 Scans all Docker containers and creates/updates NPMplus resources (proxy-hosts, dead-hosts, redirection-hosts, streams) based on container labels.
 
-This is opt-in per container: only containers with labels starting with the prefix (default `npmp.`) are considered (configurable via `NPMP_DOCKER_LABEL_PREFIX`).
+Easiest way to migrate NPMplus config to Docker labels is to first export existing config to JSON files via `npmp-cli save`, then convert those JSON files to docker-compose YAML labels blocks via `npmp-cli json-to-compose`, and finally copy-paste the generated labels into your container definitions.
 
 ### Label Schema
 
@@ -96,67 +96,69 @@ Labels follow the pattern: `npmp.<type>[N].<field>`
 
 | Label | Required | Description |
 | --- | --- | --- |
-| `npmp.proxy[N].domain_names` | yes | Comma-separated domain names |
-| `npmp.proxy[N].forward_host` | yes | Upstream hostname or IP |
-| `npmp.proxy[N].forward_port` | yes | Upstream port (1-65535) |
-| `npmp.proxy[N].forward_scheme` | yes | `http` or `https` |
-| `npmp.proxy[N].access_list` | no | Access list name |
-| `npmp.proxy[N].advanced_config` | no | Custom nginx config |
-| `npmp.proxy[N].allow_websocket_upgrade` | no | Enable WebSocket |
-| `npmp.proxy[N].block_exploits` | no | Block exploits |
-| `npmp.proxy[N].caching_enabled` | no | Enable caching |
-| `npmp.proxy[N].certificate` | no | Certificate nice_name |
-| `npmp.proxy[N].enabled` | no | Enable/disable |
-| `npmp.proxy[N].hsts_enabled` | no | Enable HSTS |
-| `npmp.proxy[N].hsts_subdomains` | no | HSTS subdomains |
-| `npmp.proxy[N].http2_support` | no | Enable HTTP/2 |
-| `npmp.proxy[N].ssl_forced` | no | Force SSL redirect |
-| `npmp.proxy[N].loc[N]_path` | no | Location path |
-| `npmp.proxy[N].loc[N]_forward_host` | no | Location upstream host |
-| `npmp.proxy[N].loc[N]_forward_port` | no | Location upstream port |
-| `npmp.proxy[N].loc[N]_forward_scheme` | no | Location protocol |
+| `npmp.proxy[N].domain_names` | yes | **Domain Names** (comma-separated list) |
+| `npmp.proxy[N].forward_scheme` | yes | **Scheme** |
+| `npmp.proxy[N].forward_host` | yes | **Forward Hostname / IP** |
+| `npmp.proxy[N].forward_port` | yes | **Forward Port** |
+| `npmp.proxy[N].access_list` | no | **Access List** |
+| `npmp.proxy[N].allow_websocket_upgrade` | no | **Enable fancyindex/compression** (true/false) |
+| `npmp.proxy[N].block_exploits` | no | **Block Common Exploits** (true/false) |
+| `npmp.proxy[N].caching_enabled` | no | **Cache Assets** (true/false) |
+| `npmp.proxy[N].certificate` | no | **TLS Certificate** (certificate nice_name) |
+| `npmp.proxy[N].ssl_forced` | no | **Force HTTPS** (true/false) |
+| `npmp.proxy[N].http2_support` | no | **HTTP/3 Support** (true/false) |
+| `npmp.proxy[N].hsts_enabled` | no | **HSTS Enabled** (true/false) |
+| `npmp.proxy[N].hsts_subdomains` | no | **HSTS Sub-domains** (true/false) |
+| `npmp.proxy[N].loc[N]_path` | no | **Custom Locations** |
+| `npmp.proxy[N].loc[N]_forward_scheme` | no | **CL Scheme** |
+| `npmp.proxy[N].loc[N]_forward_host` | no | **CL Forward Hostname / IP** |
+| `npmp.proxy[N].loc[N]_forward_port` | no | **CL Forward Port** |
+| `npmp.proxy[N].advanced_config` | no | **Custom Nginx Configuration** |
+| `npmp.proxy[N].enabled` | no | **Enabled** (true/false) |
 
-### Dead-Host Labels
+### Dead/404 Host Labels
 
 | Label | Required | Description |
 | --- | --- | --- |
-| `npmp.dead[N].domain_names` | yes | Comma-separated domain names |
-| `npmp.dead[N].certificate` | no | Certificate nice_name |
-| `npmp.dead[N].enabled` | no | Enable/disable |
-| `npmp.dead[N].ssl_forced` | no | Force SSL redirect |
-| `npmp.dead[N].hsts_enabled` | no | Enable HSTS |
-| `npmp.dead[N].hsts_subdomains` | no | HSTS subdomains |
-| `npmp.dead[N].http2_support` | no | Enable HTTP/2 |
+| `npmp.dead[N].domain_names` | yes | **Domain Names** (comma-separated list) |
+| `npmp.dead[N].certificate` | no | **TLS Certificate** |
+| `npmp.dead[N].ssl_forced` | no | **Force HTTPS** (true/false) |
+| `npmp.dead[N].http2_support` | no | **HTTP/3 Support** (true/false) |
+| `npmp.dead[N].hsts_enabled` | no | **HSTS Enabled** (true/false) |
+| `npmp.dead[N].hsts_subdomains` | no | **HSTS Sub-domains** (true/false) |
+| `npmp.dead[N].advanced_config` | no | **Custom Nginx Configuration** |
+| `npmp.dead[N].enabled` | no | **Enabled** (true/false) |
 
 ### Redirection-Host Labels
 
 | Label | Required | Description |
 | --- | --- | --- |
-| `npmp.redirect[N].domain_names` | yes | Comma-separated domain names |
-| `npmp.redirect[N].forward_domain_name` | yes | Target domain |
-| `npmp.redirect[N].forward_http_code` | yes | HTTP redirect code (301, 302, etc) |
-| `npmp.redirect[N].forward_scheme` | yes | `http` or `https` |
-| `npmp.redirect[N].preserve_path` | no | Keep path in redirect |
-| `npmp.redirect[N].certificate` | no | Certificate nice_name |
-| `npmp.redirect[N].enabled` | no | Enable/disable |
-| `npmp.redirect[N].ssl_forced` | no | Force SSL redirect |
-| `npmp.redirect[N].block_exploits` | no | Block exploits |
-| `npmp.redirect[N].hsts_enabled` | no | Enable HSTS |
-| `npmp.redirect[N].hsts_subdomains` | no | HSTS subdomains |
-| `npmp.redirect[N].http2_support` | no | Enable HTTP/2 |
+| `npmp.redirect[N].domain_names` | yes | **Domain Names** (comma-separated domain names) |
+| `npmp.redirect[N].forward_scheme` | yes | **Scheme** |
+| `npmp.redirect[N].forward_domain_name` | yes | **Forward Domain** |
+| `npmp.redirect[N].forward_http_code` | yes | **HTTP Code** (HTTP redirect code 301, 302 etc) |
+| `npmp.redirect[N].preserve_path` | no | **Preserve Path** (true/false) |
+| `npmp.redirect[N].block_exploits` | no | **Block Common Exploits** (true/false) |
+| `npmp.redirect[N].certificate` | no | **TLS Certificate** (certificate nice_name) |
+| `npmp.redirect[N].ssl_forced` | no | **Force HTTPS** (true/false) |
+| `npmp.redirect[N].http2_support` | no | **HTTP/3 Support** (true/false) |
+| `npmp.redirect[N].hsts_enabled` | no | **HSTS Enabled** (true/false) |
+| `npmp.redirect[N].hsts_subdomains` | no | **HSTS Sub-domains** (true/false) |
+| `npmp.redirect[N].advanced_config` | no | **Custom Nginx Configuration** |
+| `npmp.redirect[N].enabled` | no | **Enabled** (true/false) |
 
 ### Stream Labels
 
 | Label | Required | Description |
 | --- | --- | --- |
-| `npmp.stream[N].incoming_port` | yes | Listen port |
-| `npmp.stream[N].forwarding_host` | yes | Upstream hostname or IP |
-| `npmp.stream[N].forwarding_port` | yes | Upstream port |
-| `npmp.stream[N].tcp_forwarding` | no | Enable TCP forwarding |
-| `npmp.stream[N].udp_forwarding` | no | Enable UDP forwarding |
-| `npmp.stream[N].proxy_protocol_forwarding` | no | Enable proxy protocol |
-| `npmp.stream[N].certificate` | no | Certificate nice_name |
-| `npmp.stream[N].enabled` | no | Enable/disable |
+| `npmp.stream[N].incoming_port` | yes | **Incoming Port** |
+| `npmp.stream[N].forwarding_host` | yes | **Forward Host** |
+| `npmp.stream[N].forwarding_port` | yes | **Forward Port** |
+| `npmp.stream[N].tcp_forwarding` | no | **TCP** (true/false) |
+| `npmp.stream[N].udp_forwarding` | no | **UDP** (true/false) |
+| `npmp.stream[N].proxy_protocol_forwarding` | no | **Proxy Protocol** (true/false) |
+| `npmp.stream[N].certificate` | no | **TLS Certificate** (certificate nice_name) |
+| `npmp.stream[N].enabled` | no | **Enabled** (true/false) |
 
 ### Example
 
