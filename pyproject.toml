@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "npmp-cli"
-version = "0.2.51"
+version = "0.2.53"
 description = "Python CLI for NPMplus (ZoeyVid/NPMplus)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,7 @@ Repository = "https://github.com/Jaano/npmp-cli"
 
 [project.optional-dependencies]
 dev = [
+  "pyinstaller>=6.11",
   "pytest>=7.4",
   "pytest-cov>=4.1",
   "pyright>=1.1.390",
