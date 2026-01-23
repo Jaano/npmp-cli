@@ -15,10 +15,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-13
+          - os: macos-15
             name: macos-intel
             artifact: npmp-cli-macos-intel
-          - os: macos-14
+          - os: macos-latest
             name: macos-arm
             artifact: npmp-cli-macos-arm
           - os: ubuntu-latest
