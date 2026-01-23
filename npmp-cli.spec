@@ -6,7 +6,7 @@ from pathlib import Path
 
 block_cipher = None
 
-project_root = Path(__file__).resolve().parent
+project_root = Path(SPECPATH)
 src_path = str(project_root / "src")
 
 
