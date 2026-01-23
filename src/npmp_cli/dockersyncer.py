@@ -622,7 +622,7 @@ class DockerSyncer:
                     continue
 
             if mode == "create":
-                item = ProxyHostItem(data=dict(base_payload))
+                item = ProxyHostItem(dict(base_payload))
                 _mode, result = item.set(client)
                 logger.info(
                     "Synced %s %s (create) id=%s from docker container=%s",
@@ -794,7 +794,7 @@ class DockerSyncer:
                     continue
 
             if mode == "create":
-                item = DeadHostItem(data=dict(base_payload))
+                item = DeadHostItem(dict(base_payload))
                 _mode, result = item.set(client)
                 logger.info(
                     "Synced dead-hosts %s (create) id=%s from docker container=%s",
@@ -948,7 +948,7 @@ class DockerSyncer:
                     continue
 
             if mode == "create":
-                item = RedirectionHostItem(data=dict(base_payload))
+                item = RedirectionHostItem(dict(base_payload))
                 _mode, result = item.set(client)
                 logger.info(
                     "Synced redirection-hosts %s (create) id=%s from docker container=%s",
@@ -1099,7 +1099,7 @@ class DockerSyncer:
                     continue
 
             if mode == "create":
-                item = StreamItem(data=dict(base_payload))
+                item = StreamItem(dict(base_payload))
                 _mode, result = item.set(client)
                 logger.info(
                     "Synced streams %s (create) id=%s from docker container=%s",
