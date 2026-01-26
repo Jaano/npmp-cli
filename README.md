@@ -14,6 +14,22 @@ Small Python toolkit to talk to **NPMplus** ([ZoeyVid/NPMplus](https://github.co
 
 ## Install
 
+### Pre-built Binaries
+
+Download the latest release for your platform from [Releases](https://github.com/Jaano/npmp-cli/releases):
+
+- `npmp-cli-linux` — Linux x86_64 (requires GLIBC 2.35+)
+- `npmp-cli-macos-arm` — macOS Apple Silicon
+- `npmp-cli-macos-intel` — macOS Intel
+- `npmp-cli-windows.exe` — Windows
+
+```bash
+chmod +x npmp-cli-linux
+./npmp-cli-linux --help
+```
+
+### From Source
+
 ```bash
 python -m venv .venv
 .venv/bin/python -m pip install -e .
@@ -27,9 +43,15 @@ For development:
 
 ## Usage
 
-Use `run.sh` to invoke the CLI:
+### Using Pre-built Binary
 
-for example:
+```bash
+./npmp-cli --config .env save
+./npmp-cli --config /path/to/prod.env sync-docker --dry-run
+./npmp-cli save --help
+```
+
+### Using run.sh (from source)
 
 ```bash
 ./run.sh save --help
@@ -68,13 +90,13 @@ You can set these environment variables or put them in `.env` at repo root (will
 | `sync-docker [--takeownership] [--disable-orphans] [--delete-orphans] [--dry-run]` | Sync Docker labels to NPMplus |
 | `json-to-compose [--service-name TEXT] INPUT.json [OUTPUT.yml]` | Convert JSON to compose labels |
 
-Global options: `--log-level`, `--log-console-stream`, `--log-file`, `--log-file-level`
+Global options: `--config`, `--log-level`, `--log-console-stream`, `--log-file`, `--log-file-level`
 
 Examples:
 
 ```bash
-npmp-cli save --out ./npmp-config
-npmp-cli audit-log --out ./audit.log
+npmp-cli --config .env save --out ./npmp-config
+npmp-cli --config prod.env audit-log --out ./audit.log
 npmp-cli load --takeownership './npmp-config/proxy-hosts__*.json'
 npmp-cli sync-docker --takeownership --disable-orphans
 npmp-cli json-to-compose ./npmp-config/proxy-hosts__62.json
