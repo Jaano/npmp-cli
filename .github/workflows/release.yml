@@ -15,18 +15,22 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-15
+          - os: macos-latest
             name: macos-intel
             artifact: npmp-cli-macos-intel
+            arch: x86_64
           - os: macos-latest
             name: macos-arm
             artifact: npmp-cli-macos-arm
+            arch: arm64
           - os: ubuntu-latest
             name: linux
             artifact: npmp-cli-linux
+            arch: ""
           - os: windows-latest
             name: windows
             artifact: npmp-cli-windows
+            arch: ""
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -44,7 +48,7 @@ jobs:
 
       - name: Build executable
         run: |
-          python -m PyInstaller --clean --noconfirm npmp-cli.spec
+          python -m PyInstaller --clean --noconfirm ${{ matrix.arch && format('--target-arch {0}', matrix.arch) || '' }} npmp-cli.spec
 
       - name: Rename binary (Unix)
         if: runner.os != 'Windows'
