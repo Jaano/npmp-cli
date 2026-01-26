@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 block_cipher = None
+target_arch = os.environ.get("PYINSTALLER_TARGET_ARCH") or None
 
 project_root = Path(SPECPATH)
 src_path = str(project_root / "src")
@@ -45,7 +47,7 @@ exe = EXE(
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch=None,
+    target_arch=target_arch,
     codesign_identity=None,
     entitlements_file=None,
 )

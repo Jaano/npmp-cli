@@ -47,8 +47,10 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Build executable
+        env:
+          PYINSTALLER_TARGET_ARCH: ${{ matrix.arch }}
         run: |
-          python -m PyInstaller --clean --noconfirm ${{ matrix.arch && format('--target-arch {0}', matrix.arch) || '' }} npmp-cli.spec
+          python -m PyInstaller --clean --noconfirm npmp-cli.spec
 
       - name: Rename binary (Unix)
         if: runner.os != 'Windows'
