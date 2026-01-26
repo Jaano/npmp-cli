@@ -16,7 +16,12 @@ from .ymlfilemanager import YmlFileManager
 
 logger = ConfigManager.get_logger(__name__)
 
-ConfigManager.load_dotenv_best_effort()
+
+def _load_config_callback(value: str) -> str:
+    """Eager callback to load env file before other options are processed."""
+    ConfigManager.load_dotenv(value)
+    return value
+
 
 app = typer.Typer(
     add_completion=False,
@@ -96,6 +101,15 @@ def _client_context(*, readonly: bool = False) -> Generator[NPMplusClient, None,
 
 @app.callback()
 def _main(
+    config: str = typer.Option(
+        ".env",
+        "--config",
+        envvar="NPMP_ENV_FILE",
+        help="Path to env config file.",
+        show_default=True,
+        is_eager=True,
+        callback=_load_config_callback,
+    ),
     log_level: str = typer.Option(
         "INFO",
         "--log-level",

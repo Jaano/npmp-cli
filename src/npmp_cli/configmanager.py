@@ -29,17 +29,15 @@ class ConfigManager:
         return s not in {"0", "false", "no", "off"}
 
     @staticmethod
-    def load_dotenv_best_effort() -> None:
-        """Load `.env` (or `NPMP_ENV_FILE`) into process env.
+    def load_dotenv(path: str | None = None) -> None:
+        """Load env file into process env.
 
-        This is intentionally best-effort: missing python-dotenv or missing file
-        must not break the CLI.
+        Best-effort: missing python-dotenv or missing file does not break the CLI.
         """
         try:
             from dotenv import load_dotenv  # type: ignore[import-not-found]
 
-            env_file = os.getenv("NPMP_ENV_FILE")
-            load_dotenv(dotenv_path=env_file or DEFAULT_ENV_FILE)
+            load_dotenv(dotenv_path=path or DEFAULT_ENV_FILE)
         except Exception:
             return
 
