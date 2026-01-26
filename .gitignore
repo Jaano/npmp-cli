@@ -11,3 +11,5 @@ __pycache__/
 NPMplus/
 npmp-config/
 /my-*.*
+/build
+/dist
