@@ -23,7 +23,7 @@ jobs:
             name: macos-arm
             artifact: npmp-cli-macos-arm
             arch: arm64
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             name: linux
             artifact: npmp-cli-linux
             arch: ""
