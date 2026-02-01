@@ -58,53 +58,6 @@ class NPMplusApi:
             self.verify_tls,
             self.timeout_s,
         )
-        self._request_seq = 0
-
-        def _log_request(request: httpx.Request) -> None:
-            if not logger.isEnabledFor(10):
-                return
-            self._request_seq += 1
-            req_id = self._request_seq
-            request.extensions["npmp.req_id"] = req_id
-            request.extensions["npmp.start"] = time.perf_counter()
-
-            body_len: int | None
-            try:
-                body_len = len(request.content) if request.content is not None else 0
-            except Exception:
-                body_len = None
-
-            logger.debug(
-                "HTTP -> #%s %s %s headers=%s body_bytes=%s",
-                req_id,
-                request.method,
-                request.url,
-                dict(request.headers),
-                body_len,
-            )
-
-        def _log_response(response: httpx.Response) -> None:
-            if not logger.isEnabledFor(10):
-                return
-            req = response.request
-            req_id = req.extensions.get("npmp.req_id")
-            start = req.extensions.get("npmp.start")
-            ms: float | None = None
-            if isinstance(start, (int, float)):
-                ms = (time.perf_counter() - float(start)) * 1000.0
-
-            ct = response.headers.get("content-type")
-            cl = response.headers.get("content-length")
-            logger.debug(
-                "HTTP <- #%s %s %s status=%s elapsed_ms=%s content_type=%s content_length=%s",
-                req_id,
-                req.method,
-                req.url,
-                response.status_code,
-                f"{ms:.1f}" if ms is not None else None,
-                ct,
-                cl,
-            )
 
         self._client = httpx.Client(
             base_url=self.base_url,
@@ -112,7 +65,6 @@ class NPMplusApi:
             verify=self.verify_tls,
             headers={"accept": "application/json"},
             transport=self.transport,
-            event_hooks={"request": [_log_request], "response": [_log_response]},
         )
 
     def _web_request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
@@ -125,19 +77,11 @@ class NPMplusApi:
         for attempt in range(1, attempts + 1):
             try:
                 return self._client.request(method, path, **kwargs)
-            except httpx.TransportError as e:
+            except httpx.TransportError:
                 if attempt >= attempts:
                     raise
                 # Small backoff; keep it short to avoid long CLI stalls.
                 time.sleep(min(0.25 * attempt, 2.0))
-                logger.debug(
-                    "HTTP transport error on %s %s (attempt %s/%s): %s; retrying",
-                    method,
-                    path,
-                    attempt,
-                    attempts,
-                    str(e),
-                )
         raise RuntimeError("request failed")
 
     def _web_close(self) -> None:
@@ -170,7 +114,7 @@ class NPMplusApi:
             raise ValueError("identity is required")
         if not secret:
             raise ValueError("secret is required")
-        logger.info("Logging in to NPMplus")
+        logger.debug("Logging in to NPMplus")
         resp = self._web_request("POST", "tokens", json={"identity": identity, "secret": secret})
         if resp.status_code in (401, 403):
             logger.warning("Login failed with status_code=%s", resp.status_code)
@@ -392,7 +336,6 @@ class NPMplusApi:
         if self.readonly:
             logger.info("[dry-run] delete_certificate id=%s", certificate_id)
             return
-        logger.debug("DELETE nginx/certificates/%s", certificate_id)
         resp = self._web_request("DELETE", f"nginx/certificates/{certificate_id}")
         if resp.status_code in (401, 403):
             raise PermissionError(f"Unauthorized ({resp.status_code}) for DELETE nginx/certificates/{certificate_id}")
@@ -490,7 +433,6 @@ class NPMplusApi:
         if self.readonly:
             logger.info("[dry-run] delete_access_list id=%s", list_id)
             return
-        logger.debug("DELETE nginx/access-lists/%s", list_id)
         resp = self._web_request("DELETE", f"nginx/access-lists/{list_id}")
         if resp.status_code in (401, 403):
             raise PermissionError(f"Unauthorized ({resp.status_code}) for DELETE nginx/access-lists/{list_id}")
@@ -512,7 +454,6 @@ class NPMplusApi:
         if self.readonly:
             logger.info("[dry-run] delete_proxy_host id=%s", host_id)
             return
-        logger.debug("DELETE nginx/proxy-hosts/%s", host_id)
         resp = self._web_request("DELETE", f"nginx/proxy-hosts/{host_id}")
         if resp.status_code in (401, 403):
             raise PermissionError(f"Unauthorized ({resp.status_code}) for DELETE nginx/proxy-hosts/{host_id}")
@@ -546,7 +487,6 @@ class NPMplusApi:
         if self.readonly:
             logger.info("[dry-run] delete_redirection_host id=%s", host_id)
             return
-        logger.debug("DELETE nginx/redirection-hosts/%s", host_id)
         resp = self._web_request("DELETE", f"nginx/redirection-hosts/{host_id}")
         if resp.status_code in (401, 403):
             raise PermissionError(f"Unauthorized ({resp.status_code}) for DELETE nginx/redirection-hosts/{host_id}")
@@ -580,7 +520,6 @@ class NPMplusApi:
         if self.readonly:
             logger.info("[dry-run] delete_dead_host id=%s", host_id)
             return
-        logger.debug("DELETE nginx/dead-hosts/%s", host_id)
         resp = self._web_request("DELETE", f"nginx/dead-hosts/{host_id}")
         if resp.status_code in (401, 403):
             raise PermissionError(f"Unauthorized ({resp.status_code}) for DELETE nginx/dead-hosts/{host_id}")
@@ -614,7 +553,6 @@ class NPMplusApi:
         if self.readonly:
             logger.info("[dry-run] delete_stream id=%s", stream_id)
             return
-        logger.debug("DELETE nginx/streams/%s", stream_id)
         resp = self._web_request("DELETE", f"nginx/streams/{stream_id}")
         if resp.status_code in (401, 403):
             raise PermissionError(f"Unauthorized ({resp.status_code}) for DELETE nginx/streams/{stream_id}")
@@ -637,10 +575,8 @@ class NPMplusApi:
         params: dict[str, Any] = {}
         if expand:
             params["expand"] = ",".join(expand)
-        logger.debug("GET %s params=%s", path, params if params else None)
         resp = self._web_request("GET", path, params=params if params else None)
         if resp.status_code in (401, 403):
-            logger.warning("Unauthorized status_code=%s for GET %s", resp.status_code, path)
             raise PermissionError(f"Unauthorized ({resp.status_code}) for GET {path}")
         self._raise_for_status(resp)
         data = resp.json()
@@ -651,7 +587,6 @@ class NPMplusApi:
     def _post_object(
         self, path: str, payload: dict[str, Any] | None = None, *, timeout_s: float | None = None
     ) -> dict[str, Any]:
-        logger.debug("POST %s", path)
         resp = self._web_request(
             "POST",
             path,
@@ -667,10 +602,23 @@ class NPMplusApi:
         return data
 
     def _post_bool(self, path: str) -> bool:
-        logger.debug("POST %s", path)
         resp = self._web_request("POST", path)
         if resp.status_code in (401, 403):
             raise PermissionError(f"Unauthorized ({resp.status_code}) for POST {path}")
+
+        if resp.status_code == 400:
+            try:
+                data = resp.json()
+            except Exception:
+                data = None
+            if isinstance(data, dict):
+                err = data.get("error")
+                if isinstance(err, dict):
+                    msg = err.get("message")
+                    if isinstance(msg, str):
+                        msg_norm = " ".join(msg.split()).strip().lower()
+                        if msg_norm.endswith("is already enabled") or msg_norm.endswith("is already disabled"):
+                            return True
         self._raise_for_status(resp)
         data = resp.json()
         if isinstance(data, bool):
@@ -680,7 +628,6 @@ class NPMplusApi:
         raise RuntimeError(f"Expected bool response from POST {path}, got {type(data).__name__}")
 
     def _delete_object(self, path: str) -> dict[str, Any]:
-        logger.debug("DELETE %s", path)
         resp = self._web_request("DELETE", path)
         if resp.status_code in (401, 403):
             raise PermissionError(f"Unauthorized ({resp.status_code}) for DELETE {path}")
@@ -696,10 +643,8 @@ class NPMplusApi:
             params["expand"] = ",".join(expand)
         if query:
             params["query"] = query
-        logger.debug("GET %s params=%s", path, params if params else None)
         resp = self._web_request("GET", path, params=params)
         if resp.status_code in (401, 403):
-            logger.warning("Unauthorized status_code=%s for GET %s", resp.status_code, path)
             raise PermissionError(f"Unauthorized ({resp.status_code}) for GET {path}")
         self._raise_for_status(resp)
         data = resp.json()
@@ -713,8 +658,6 @@ class NPMplusApi:
         method_l = method.lower().strip()
         if method_l not in ("post", "put"):
             raise ValueError("method must be post or put")
-
-        logger.debug("%s %s (json body keys=%s)", method_l.upper(), path, sorted(payload.keys()))
         resp = self._web_request(method_l.upper(), path, json=dict(payload), timeout=timeout_s)
         if resp.status_code in (401, 403):
             raise PermissionError(f"Unauthorized ({resp.status_code}) for {method_l.upper()} {path}")

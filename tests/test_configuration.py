@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import time
 import uuid
-from collections.abc import Callable, Generator, Mapping
+from collections.abc import Callable, Generator, Mapping, Sequence
 from typing import Any
 
 import pytest
@@ -39,19 +39,14 @@ def npmp_verify_tls() -> bool:
 
 @pytest.fixture(scope="session")
 def npmplus_client(npmp_base_url: str, npmp_verify_tls: bool) -> Generator[NPMplusClient, None, None]:
-    token = os.getenv("NPMP_TOKEN")
     identity = os.getenv("NPMP_IDENTITY")
     secret = os.getenv("NPMP_SECRET")
 
-    if not token and not (identity and secret):
-        pytest.skip("Need either NPMP_TOKEN or both NPMP_IDENTITY and NPMP_SECRET")
+    if not (identity and secret):
+        pytest.skip("Need both NPMP_IDENTITY and NPMP_SECRET")
 
     with NPMplusClient(base_url=npmp_base_url, verify_tls=npmp_verify_tls) as client:
-        if token:
-            client.set_token_cookie(token)
-        else:
-            assert identity is not None and secret is not None
-            client.login(identity, secret)
+        client.login(identity, secret)
         yield client
 
 
@@ -83,40 +78,41 @@ def require_docker() -> bool:
     return True
 
 
-def domain_key(value: object) -> tuple[str, ...] | None:
-    if not isinstance(value, list):
-        return None
-    parts = [str(v).strip().lower() for v in value]
+def domain_key(value: Sequence[str]) -> tuple[str, ...] | None:
+    parts = [str(v).strip().lower() for v in (value or [])]
     parts = [p for p in parts if p]
     if not parts:
         return None
     return tuple(sorted(set(parts)))
 
 
-def find_item_by_domains(
-    items: Mapping[int, Mapping[str, object]], domains: tuple[str, ...]
-) -> Mapping[str, object] | None:
+def find_item_by_domains(items: Mapping[int, Any], domains: tuple[str, ...]) -> Any | None:
+    wanted = domain_key(domains)
+    if wanted is None:
+        return None
     for item in items.values():
-        key = domain_key(item.get("domain_names") or item.get("domainNames"))
-        if key == domains:
+        item_domains = getattr(item, "domain_names", None)
+        if item_domains is None:
+            continue
+        if domain_key(item_domains) == wanted:
             return item
     return None
 
 
-def find_item_by_id(items: Mapping[int, Mapping[str, object]], item_id: int) -> Mapping[str, object] | None:
+def find_item_by_id(items: Mapping[int, Any], item_id: int) -> Any | None:
     for item in items.values():
         try:
-            if int(str(item.get("id")).strip()) == item_id:
+            if int(item.id) == item_id:
                 return item
         except Exception:
             continue
     return None
 
 
-def find_item_by_name(items: Mapping[int, Mapping[str, object]], name: str) -> Mapping[str, object] | None:
+def find_item_by_name(items: Mapping[int, Any], name: str) -> Any | None:
     wanted = (name or "").strip().lower()
     for item in items.values():
-        n = item.get("name") or item.get("title")
+        n = getattr(item, "name", None) or getattr(item, "title", None)
         if n is None:
             continue
         if str(n).strip().lower() == wanted:
@@ -190,7 +186,7 @@ def schema_array_item_properties(schema: Mapping[str, Any], path: str, method: s
 
 
 def wait_for_field(
-    list_func: Callable[..., Mapping[int, Mapping[str, object]]],
+    list_func: Callable[..., Mapping[int, Any]],
     item_id: int,
     field: str,
     expected: object,
@@ -198,12 +194,12 @@ def wait_for_field(
     compare: Callable[[object, object], bool] | None = None,
     attempts: int = 12,
     sleep_s: float = 0.3,
-) -> Mapping[str, object]:
+) -> Any:
     for _ in range(attempts):
         items_map = list_func()
         found = find_item_by_id(items_map, item_id)
         if found is not None:
-            actual = found.get(field)
+            actual = getattr(found, field, None)
             if compare is not None:
                 if compare(actual, expected):
                     return found
@@ -214,3 +210,74 @@ def wait_for_field(
     found = find_item_by_id(items_map, item_id)
     assert found is not None
     return found
+
+
+class StubNPMplusClient:
+    def __init__(self, *, access_lists: dict[str, int] | None = None, certs: dict[str, int] | None = None) -> None:
+        self._access_lists = access_lists or {}
+        self._certs = certs or {}
+        self.deleted_ids: list[int] = []
+        self.created_payloads: list[dict[str, object]] = []
+        self.updated: list[tuple[int, dict[str, object]]] = []
+
+    @property
+    def my_id(self) -> int:
+        return 1
+
+    @property
+    def my_natural_index(self) -> str:
+        return "stub_user"
+
+    def get_current_user(self) -> dict[str, int]:
+        return {"id": 1}
+
+    def get_access_list_id(self, natural_index: str) -> int:
+        return int(self._access_lists.get(str(natural_index).strip(), -1))
+
+    def get_certificate_id(self, natural_index: str) -> int:
+        return int(self._certs.get(str(natural_index).strip(), -1))
+
+    def get_proxy_host_id(self, natural_index: str) -> int:
+        wanted = str(natural_index).strip()
+        if not wanted:
+            return -1
+        for item in self.list_proxy_hosts().values():
+            if getattr(item, "natural_index", None) == wanted:
+                try:
+                    return int(item.id)
+                except Exception:
+                    return -1
+        return -1
+
+    def list_proxy_hosts(self) -> dict[int, Any]:
+        from npmp_cli.models import ProxyHostItem
+
+        return {
+            100: ProxyHostItem(
+                api=self,  # type: ignore[arg-type]
+                id=100,
+                domain_names=["example.invalid"],
+                forward_scheme="http",
+                forward_host="old.example",
+                forward_port=80,
+                owner_user_id=2,
+                owner="other_user",
+            )
+        }
+
+    def create_proxy_host(self, payload: dict[str, object]) -> dict[str, object]:
+        self.created_payloads.append(payload)
+        return {"id": 101, **payload}
+
+    def update_proxy_host(self, host_id: int, payload: dict[str, object]) -> dict[str, object]:
+        self.updated.append((int(host_id), payload))
+        return {"id": int(host_id), **payload}
+
+    def delete_proxy_host(self, host_id: int) -> None:
+        self.deleted_ids.append(host_id)
+
+    def enable_proxy_host(self, _host_id: int) -> None:
+        pass
+
+    def disable_proxy_host(self, _host_id: int) -> None:
+        pass

@@ -4,7 +4,8 @@ import os
 
 import pytest
 
-from npmp_cli.dockersyncer import DockerSyncer
+from npmp_cli.docker.scanner import scan_docker_specs
+from npmp_cli.docker.sync_proxy import sync_docker_proxy_hosts
 from npmp_cli.npmplus_client import NPMplusClient
 
 pytestmark = pytest.mark.integration
@@ -44,21 +45,20 @@ def test_scan_and_sync(require_docker: bool, npmplus_client: NPMplusClient, uniq
         except Exception as e:
             pytest.skip(f"Failed to start docker container: {e}")
 
-        proxy_specs, _, _, _ = DockerSyncer.scan_docker_specs()
+        proxy_specs, _, _, _ = scan_docker_specs()
         spec = next((s for s in proxy_specs if domain in (s.domain_names or [])), None)
         assert spec is not None
 
-        DockerSyncer.sync_docker_proxy_hosts(client=npmplus_client, specs=[spec])
+        sync_docker_proxy_hosts(client=npmplus_client, docker_specs=[spec])
 
         items = npmplus_client.list_proxy_hosts()
         found = None
         for item in items.values():
-            domains = item.get("domain_names") or item.get("domainNames")
-            if isinstance(domains, list) and any(str(d).strip().lower() == domain.lower() for d in domains):
+            if any(str(d).strip().lower() == domain.lower() for d in (item.domain_names or [])):
                 found = item
                 break
         assert found is not None
-        created_id = int(str(found.get("id")).strip())
+        created_id = int(found.id)
     finally:
         if created_id is not None:
             try:

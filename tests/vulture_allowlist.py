@@ -1,18 +1,66 @@
 from npmp_cli import cli as _cli
-from npmp_cli.dockersyncer import (
-    DockerDeadHostSpec,
-    DockerProxyHostSpec,
-    DockerRedirectionHostSpec,
-    DockerStreamSpec,
-)
+from npmp_cli import cli_access_lists as _cli_access_lists
+from npmp_cli import cli_certificates as _cli_certificates
+from npmp_cli import cli_dead_hosts as _cli_dead_hosts
+from npmp_cli import cli_proxy_hosts as _cli_proxy_hosts
+from npmp_cli import cli_redirect_hosts as _cli_redirect_hosts
+from npmp_cli import cli_settings as _cli_settings
+from npmp_cli import cli_streams as _cli_streams
+from npmp_cli.docker.specs import DockerDeadHostSpec, DockerProxyHostSpec, DockerRedirectionHostSpec, DockerStreamSpec
 from npmp_cli.npmplus_api import NPMplusApi
 
 _ = _cli._main
 _ = _cli.save
+_ = _cli.audit_log
 _ = _cli.schema
 _ = _cli.load
 _ = _cli.sync_docker
 _ = _cli.json_to_compose
+
+_ = _cli_proxy_hosts.proxy_host_list
+_ = _cli_proxy_hosts.proxy_host_show
+_ = _cli_proxy_hosts.proxy_host_create
+_ = _cli_proxy_hosts.proxy_host_update
+_ = _cli_proxy_hosts.proxy_host_delete
+_ = _cli_proxy_hosts.proxy_host_enable
+_ = _cli_proxy_hosts.proxy_host_disable
+
+_ = _cli_dead_hosts.dead_host_list
+_ = _cli_dead_hosts.dead_host_show
+_ = _cli_dead_hosts.dead_host_create
+_ = _cli_dead_hosts.dead_host_update
+_ = _cli_dead_hosts.dead_host_delete
+_ = _cli_dead_hosts.dead_host_enable
+_ = _cli_dead_hosts.dead_host_disable
+
+_ = _cli_redirect_hosts.redirect_host_list
+_ = _cli_redirect_hosts.redirect_host_show
+_ = _cli_redirect_hosts.redirect_host_create
+_ = _cli_redirect_hosts.redirect_host_update
+_ = _cli_redirect_hosts.redirect_host_delete
+_ = _cli_redirect_hosts.redirect_host_enable
+_ = _cli_redirect_hosts.redirect_host_disable
+
+_ = _cli_streams.stream_list
+_ = _cli_streams.stream_show
+_ = _cli_streams.stream_create
+_ = _cli_streams.stream_update
+_ = _cli_streams.stream_delete
+_ = _cli_streams.stream_enable
+_ = _cli_streams.stream_disable
+
+_ = _cli_access_lists.access_list_list
+_ = _cli_access_lists.access_list_show
+_ = _cli_access_lists.access_list_create
+_ = _cli_access_lists.access_list_update
+_ = _cli_access_lists.access_list_delete
+
+_ = _cli_certificates.certificate_list
+_ = _cli_certificates.certificate_show
+_ = _cli_certificates.certificate_delete
+
+_ = _cli_settings.settings_list
+_ = _cli_settings.settings_show
 
 _ = NPMplusApi.set_token_cookie
 _ = NPMplusApi.login
@@ -32,6 +80,7 @@ _ = NPMplusApi.set_user_permissions
 _ = NPMplusApi.login_as_user
 
 _ = NPMplusApi.list_audit_log
+_ = NPMplusApi.get_audit_event
 
 _ = NPMplusApi.get_hosts_report
 

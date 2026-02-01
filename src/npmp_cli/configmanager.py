@@ -39,16 +39,11 @@ class ConfigManager:
 
             load_dotenv(dotenv_path=path or DEFAULT_ENV_FILE)
         except Exception:
-            return
+            pass
 
     @staticmethod
     def base_url() -> str | None:
         v = os.getenv("NPMP_BASE_URL")
-        return v.strip() if v and v.strip() else None
-
-    @staticmethod
-    def token() -> str | None:
-        v = os.getenv("NPMP_TOKEN")
         return v.strip() if v and v.strip() else None
 
     @staticmethod

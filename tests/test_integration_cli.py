@@ -8,7 +8,7 @@ from typer.testing import CliRunner
 
 from npmp_cli.cli import app
 from npmp_cli.npmplus_client import NPMplusClient
-from tests.conftest import find_item_by_domains
+from tests.test_configuration import find_item_by_domains
 
 pytestmark = pytest.mark.integration
 
@@ -56,7 +56,7 @@ def test_load_save_json_to_compose_roundtrip(npmplus_client: NPMplusClient, uniq
 
         found = find_item_by_domains(npmplus_client.list_proxy_hosts(), domains)
         assert found is not None
-        created_id = int(str(found.get("id")).strip())
+        created_id = int(found.id)
 
         out_dir = Path("out")
         result2 = runner.invoke(app, ["save", "--out", str(out_dir)])
@@ -115,7 +115,7 @@ def test_load_save_json_to_compose_roundtrip(npmplus_client: NPMplusClient, uniq
         npmplus_client.delete_proxy_host(created_id)
 
 
-def test_load_takeownership_does_not_recreate_when_same_owner(
+def test_load_take_ownership_does_not_recreate_when_same_owner(
     npmplus_client: NPMplusClient, unique_invalid_domain: str
 ) -> None:
     runner = CliRunner()
@@ -125,7 +125,7 @@ def test_load_takeownership_does_not_recreate_when_same_owner(
     updated_id: int | None = None
 
     with runner.isolated_filesystem():
-        f = Path("proxy-hosts__it-takeownership.json")
+        f = Path("proxy-hosts__it-take-ownership.json")
         f.write_text(
             json.dumps(
                 {
@@ -147,7 +147,7 @@ def test_load_takeownership_does_not_recreate_when_same_owner(
 
         found1 = find_item_by_domains(npmplus_client.list_proxy_hosts(), domains)
         assert found1 is not None
-        created_id = int(str(found1.get("id")).strip())
+        created_id = int(found1.id)
 
         f.write_text(
             json.dumps(
@@ -165,16 +165,16 @@ def test_load_takeownership_does_not_recreate_when_same_owner(
             encoding="utf-8",
         )
 
-        r2 = runner.invoke(app, ["load", "--takeownership", str(f)])
+        r2 = runner.invoke(app, ["load", "--take-ownership", str(f)])
         assert r2.exit_code == 0, r2.output
 
         items2 = npmplus_client.list_proxy_hosts()
         found2 = find_item_by_domains(items2, domains)
         assert found2 is not None
-        updated_id = int(str(found2.get("id")).strip())
+        updated_id = int(found2.id)
         assert updated_id == created_id
 
-        assert str(found2.get("forward_host") or found2.get("forwardHost") or "").strip() == "example.org"
+        assert found2.forward_host == "example.org"
 
     if updated_id is not None:
         npmplus_client.delete_proxy_host(updated_id)

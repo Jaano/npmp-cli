@@ -7,10 +7,25 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from . import utils
 from .configmanager import ConfigManager
-from .dockersyncer import DeadHostFields, ProxyHostFields, RedirectionHostFields, StreamFields
+from .docker.specs import DeadHostFields, ProxyHostFields, RedirectionHostFields, StreamFields
+from .models import DeadHostItem, ProxyHostItem, RedirectionHostItem, StreamItem
 
 logger = ConfigManager.get_logger(__name__)
+
+
+_BOOL_LABEL_SUFFIXES: tuple[str, ...] = tuple(
+    sorted(
+        {
+            *ProxyHostItem.BOOL_LABEL_FIELDS,
+            *ProxyHostItem.LOCATION_BOOL_LABEL_FIELDS,
+            *DeadHostItem.BOOL_LABEL_FIELDS,
+            *RedirectionHostItem.BOOL_LABEL_FIELDS,
+            *StreamItem.BOOL_LABEL_FIELDS,
+        }
+    )
+)
 
 
 def _atomic_write_text(path: Path, content: str) -> None:
@@ -177,19 +192,6 @@ class YmlFileManager:
         return s + "."
 
     @staticmethod
-    def _as_bool_label(value: object) -> str | None:
-        if value is None:
-            return None
-        if isinstance(value, bool):
-            return "true" if value else "false"
-        s = str(value).strip().lower()
-        if s in {"1", "true", "yes", "y", "on"}:
-            return "true"
-        if s in {"0", "false", "no", "n", "off"}:
-            return "false"
-        return None
-
-    @staticmethod
     def _yaml_double_quote(value: str) -> str:
         v = YmlFileManager._escape_compose_interpolation(value or "")
         v = v.replace("\\", "\\\\")
@@ -201,10 +203,10 @@ class YmlFileManager:
         if "\n" in value or "\r" in value:
             return YmlFileManager._yaml_block_scalar(value, indent=indent)
 
-        if any(key.endswith(suffix) for suffix in ProxyHostFields.BOOL_FIELDS):
-            b = YmlFileManager._as_bool_label(value)
+        if any(key.endswith(suffix) for suffix in _BOOL_LABEL_SUFFIXES):
+            b = utils.normalize_bool(value)
             if b is not None:
-                return b
+                return "true" if b else "false"
 
         if key.endswith("forward_port"):
             try:
@@ -287,7 +289,7 @@ class YmlFileManager:
             return (1, 0, k)
 
         labels = sorted(labels, key=_label_sort_key)
-        label_map = {k: v for k, v in labels}
+        label_map = dict(labels)
 
         svc_name = (service_name or "").strip() or YmlFileManager._default_service_name_from_payload(payload)
 
@@ -395,7 +397,7 @@ class YmlFileManager:
             return (1, 0, k)
 
         labels = sorted(labels, key=_label_sort_key)
-        label_map = {k: v for k, v in labels}
+        label_map = dict(labels)
 
         svc_name = (service_name or "").strip() or YmlFileManager._default_service_name_from_payload(payload)
 
@@ -470,7 +472,7 @@ class YmlFileManager:
             return (1, 0, k)
 
         labels = sorted(labels, key=_label_sort_key)
-        label_map = {k: v for k, v in labels}
+        label_map = dict(labels)
 
         svc_name = (service_name or "").strip() or YmlFileManager._default_service_name_from_payload(payload)
 
@@ -543,7 +545,7 @@ class YmlFileManager:
             return (1, 0, k)
 
         labels = sorted(labels, key=_label_sort_key)
-        label_map = {k: v for k, v in labels}
+        label_map = dict(labels)
 
         incoming_port = payload.get("incoming_port") or payload.get("incomingPort")
         svc_name = (service_name or "").strip() or f"stream-{incoming_port}"

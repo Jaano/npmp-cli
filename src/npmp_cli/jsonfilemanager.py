@@ -5,12 +5,29 @@ import os
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar, Protocol
 
 from .configmanager import ConfigManager
-from .npmplus_client import NPMplusClient, NPMplusItemType
+from .models import (
+    AccessListItem,
+    DeadHostItem,
+    Kind,
+    ProxyHostItem,
+    RedirectionHostItem,
+    StreamItem,
+)
+from .npmplus_client import NPMplusClient
 
 logger = ConfigManager.get_logger(__name__)
+
+
+class JsonSavableItem(Protocol):
+    kind: ClassVar[Kind]
+
+    @property
+    def id(self) -> int: ...
+
+    def to_json(self) -> Any: ...
 
 
 def write_json_file(path: Path, payload: Any) -> None:
@@ -33,11 +50,12 @@ class JsonFileManager:
     def __init__(self, client: NPMplusClient) -> None:
         self._client = client
 
-    def _save_items(self, items: Mapping[int, NPMplusItemType], *, out: Path) -> None:
+    def _save_items(self, items: Mapping[int, JsonSavableItem], *, out: Path) -> None:
         for item in items.values():
             path = out / f"{item.kind.value}__{item.id}.json"
-            write_json_file(path, dict(item))
-            logger.info("Saved %s %s -> %s", item.kind.value, item.natural_index, path)
+            write_json_file(path, item.to_json())
+            natural_index = getattr(item, "natural_index", "")
+            logger.info("Saved %s %s -> %s", item.kind.value, natural_index, path)
 
     def save(self, *, out: Path) -> None:
         self._save_items(self._client.list_proxy_hosts(), out=out)
@@ -46,7 +64,7 @@ class JsonFileManager:
         self._save_items(self._client.list_streams(), out=out)
         self._save_items(self._client.list_access_lists(), out=out)
 
-    def load(self, *, file: Path, takeownership: bool = False) -> tuple[NPMplusClient.Kind, str, object]:
+    def load(self, *, file: Path, take_ownership: bool = False) -> tuple[Kind, str, object]:
         try:
             payload = json.loads(file.read_text(encoding="utf-8"))
         except Exception as e:
@@ -54,15 +72,29 @@ class JsonFileManager:
         if not isinstance(payload, dict):
             raise ValueError("JSON file must contain an object")
 
-        kind = NPMplusClient.Kind.infer_json_kind(payload)
-        item = kind.item_type()
+        kind = Kind.infer_json_kind(payload)
 
-        skip_result = item.load_from_json(self._client, payload)
-        if skip_result == "skip":
-            logger.info("Skipped loading from %s", file)
-            return kind, "skip", item.id
+        item: object
 
-        logger.info("Loading from %s", file)
-        mode, result = item.set(self._client, takeownership=takeownership)
-        new_id = item.normalize_int(result.get("id"))
+        if kind == Kind.PROXY_HOSTS:
+            item = ProxyHostItem.from_json(self._client, payload)
+            mode, result = item.save(take_ownership=take_ownership)
+        elif kind == Kind.REDIRECTION_HOSTS:
+            item = RedirectionHostItem.from_json(self._client, payload)
+            mode, result = item.save(take_ownership=take_ownership)
+        elif kind == Kind.DEAD_HOSTS:
+            item = DeadHostItem.from_json(self._client, payload)
+            mode, result = item.save(take_ownership=take_ownership)
+        elif kind == Kind.STREAMS:
+            item = StreamItem.from_json(self._client, payload)
+            mode, result = item.save(take_ownership=take_ownership)
+        elif kind == Kind.ACCESS_LISTS:
+            item = AccessListItem.from_json(self._client, payload)
+            mode, result = item.save()
+        else:
+            raise ValueError(f"Unsupported kind: {kind.value}")
+
+        new_id = result.get("id")
+        natural_index = getattr(item, "natural_index", "")
+        logger.info("Loaded %s %s <- %s", kind.value, natural_index, file)
         return kind, mode, new_id

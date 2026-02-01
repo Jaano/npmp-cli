@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "npmp-cli"
-version = "0.2.61"
+version = "0.3.14"
 description = "Python CLI for NPMplus (ZoeyVid/NPMplus)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -41,7 +41,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.pytest.ini_options]
-addopts = "-q -m 'not integration' --cov=npmp_cli --cov-report=term"
+addopts = "-q -m 'not integration' --cov=npmp_cli --cov-report=term -p tests.test_configuration"
 testpaths = ["tests"]
 markers = [
   "integration: integration tests (slow; requires live env)",

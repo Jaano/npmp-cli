@@ -1,26 +1,34 @@
 from __future__ import annotations
 
-import glob
-import os
-from collections.abc import Generator
-from contextlib import contextmanager
 from pathlib import Path
 
 import typer
 
+from .cli_access_lists import access_list_app
+from .cli_certificates import certificate_app
+from .cli_common import (
+    client_context,
+    expand_input_files,
+    format_cli_invocation_for_log,
+    load_config_callback,
+)
+from .cli_dead_hosts import dead_host_app
+from .cli_proxy_hosts import proxy_host_app
+from .cli_redirect_hosts import redirect_host_app
+from .cli_settings import settings_app
+from .cli_streams import stream_app
 from .configmanager import ConfigManager
-from .dockersyncer import DockerSyncer
+from .docker import (
+    scan_docker_specs,
+    sync_docker_dead_hosts,
+    sync_docker_proxy_hosts,
+    sync_docker_redirection_hosts,
+    sync_docker_streams,
+)
 from .jsonfilemanager import JsonFileManager, write_json_file
-from .npmplus_client import NPMplusClient
 from .ymlfilemanager import YmlFileManager
 
 logger = ConfigManager.get_logger(__name__)
-
-
-def _load_config_callback(value: str) -> str:
-    """Eager callback to load env file before other options are processed."""
-    ConfigManager.load_dotenv(value)
-    return value
 
 
 app = typer.Typer(
@@ -32,75 +40,18 @@ app = typer.Typer(
 )
 
 
-def _expand_input_files(values: list[str], *, require_suffix: str | None = None) -> list[Path]:
-    """Expand CLI positional inputs.
-
-    Supports passing explicit file paths or quoted glob patterns (e.g. 'npmp-config/*.json').
-    """
-    if not values:
-        raise typer.BadParameter("Provide at least one input file")
-
-    expanded: list[Path] = []
-    seen: set[Path] = set()
-    for raw in values:
-        v = (raw or "").strip()
-        if not v:
-            continue
-        v = os.path.expanduser(v)
-        matches = glob.glob(v, recursive=True)
-        if not matches:
-            raise typer.BadParameter(f"No files matched: {raw}")
-        for m in matches:
-            p = Path(m)
-            if not p.exists() or not p.is_file():
-                continue
-            if require_suffix is not None and p.suffix.lower() != require_suffix.lower():
-                continue
-            p = p.resolve()
-            if p in seen:
-                continue
-            seen.add(p)
-            expanded.append(p)
-
-    if not expanded:
-        suffix_msg = "" if require_suffix is None else f" (with {require_suffix} suffix)"
-        raise typer.BadParameter(f"No valid files found{suffix_msg} for: {', '.join(values)}")
-    expanded.sort(key=lambda p: (0 if "access-lists" in p.name else 1, p.name))
-    return expanded
-
-
-@contextmanager
-def _client_context(*, readonly: bool = False) -> Generator[NPMplusClient, None, None]:
-    """Create and authenticate NPMplusClient with consistent behavior across commands.
-
-    All credentials (NPMP_BASE_URL, NPMP_TOKEN or NPMP_IDENTITY + NPMP_SECRET)
-    are read from environment only.
-    """
-    base_url = ConfigManager.base_url()
-    if not base_url:
-        raise typer.BadParameter("NPMP_BASE_URL is required (set in environment or .env)")
-    verify_tls = ConfigManager.verify_tls()
-    try:
-        retry_count = ConfigManager.http_retry_count()
-    except ValueError as e:
-        raise typer.BadParameter(str(e)) from None
-
-    with NPMplusClient(base_url=base_url, verify_tls=verify_tls, retry_count=retry_count, readonly=readonly) as client:
-        token_env = ConfigManager.token()
-        if token_env:
-            client.set_token_cookie(token_env)
-        else:
-            identity_env = ConfigManager.identity()
-            secret_env = ConfigManager.secret()
-            if identity_env and secret_env:
-                client.login(identity_env, secret_env)
-            else:
-                raise typer.BadParameter("Provide NPMP_TOKEN or both NPMP_IDENTITY and NPMP_SECRET in environment")
-        yield client
+app.add_typer(proxy_host_app, name="proxy-host")
+app.add_typer(dead_host_app, name="dead-host")
+app.add_typer(redirect_host_app, name="redirect-host")
+app.add_typer(stream_app, name="stream")
+app.add_typer(access_list_app, name="access-list")
+app.add_typer(certificate_app, name="certificate")
+app.add_typer(settings_app, name="settings")
 
 
 @app.callback()
 def _main(
+    ctx: typer.Context,
     config: str = typer.Option(
         ".env",
         "--config",
@@ -108,7 +59,7 @@ def _main(
         help="Path to env config file.",
         show_default=True,
         is_eager=True,
-        callback=_load_config_callback,
+        callback=load_config_callback,
     ),
     log_level: str = typer.Option(
         "INFO",
@@ -139,6 +90,7 @@ def _main(
         show_default=False,
     ),
 ) -> None:
+    _ = config  # Eager callback already processed this value
     try:
         ConfigManager.configure_logging(
             log_level,
@@ -148,6 +100,8 @@ def _main(
         )
     except ValueError as e:
         raise typer.BadParameter(str(e)) from None
+
+    logger.info("%s", format_cli_invocation_for_log(ctx))
 
 
 @app.command("save")
@@ -159,7 +113,7 @@ def save(
     Saves all host types: proxy-hosts, redirection-hosts, dead-hosts, streams, access-lists.
     """
 
-    with _client_context() as client:
+    with client_context() as client:
         try:
             JsonFileManager(client).save(out=out)
         except PermissionError as e:
@@ -241,7 +195,7 @@ def audit_log(
         # Fallback: stable key=value format
         return " ".join(f"{k}={ev.get(k)!r}" for k in sorted(ev.keys()))
 
-    with _client_context(readonly=True) as client:
+    with client_context(readonly=True) as client:
 
         def _event_sort_key(ev: dict[str, object]) -> tuple[datetime, int]:
             ts = ev.get("created_on") or ev.get("created_at") or ev.get("createdAt") or ev.get("created")
@@ -285,7 +239,7 @@ def schema(
     ),
 ) -> None:
     """Fetch `/api/schema` (OpenAPI) and write it as JSON."""
-    with _client_context() as client:
+    with client_context() as client:
         schema_json = client.get_schema()
         if (out or "").strip() == "-":
             import json
@@ -304,9 +258,9 @@ def load(
         ...,
         help="One or more saved JSON files, or glob patterns (e.g. 'npmp-config/proxy-hosts__*.json')",
     ),
-    takeownership: bool = typer.Option(
+    take_ownership: bool = typer.Option(
         False,
-        "--takeownership",
+        "--take-ownership",
         help="If a matching record exists but is owned by a different user, delete it and create a new one owned by the current authenticated user",
     ),
     dry_run: bool = typer.Option(
@@ -319,19 +273,17 @@ def load(
 
     Accepts explicit file paths or glob patterns. Each file is applied via POST/PUT.
     """
-    input_files = _expand_input_files(files, require_suffix=".json")
+    input_files = expand_input_files(files, require_suffix=".json")
 
-    with _client_context(readonly=dry_run) as client:
+    with client_context(readonly=dry_run) as client:
+        manager = JsonFileManager(client)
         errors = 0
         for file in input_files:
             try:
-                JsonFileManager(client).load(
+                manager.load(
                     file=file,
-                    takeownership=takeownership,
+                    take_ownership=take_ownership,
                 )
-            except ValueError as e:
-                errors += 1
-                logger.error("Failed to load %s: %s", file, e)
             except Exception as e:
                 errors += 1
                 logger.error("Failed to load %s: %s", file, e)
@@ -339,12 +291,14 @@ def load(
         if errors:
             raise typer.Exit(code=2)
 
+        logger.info("Done")
+
 
 @app.command("sync-docker")
 def sync_docker(
-    takeownership: bool = typer.Option(
+    take_ownership: bool = typer.Option(
         False,
-        "--takeownership",
+        "--take-ownership",
         help="If a matching item exists but is owned by a different user, delete it and create a new one owned by the current authenticated user",
     ),
     disable_orphans: bool = typer.Option(
@@ -365,47 +319,47 @@ def sync_docker(
 ) -> None:
     """Scan Docker containers for labels and sync proxy-hosts, dead-hosts, redirection-hosts, streams."""
 
-    proxy_specs, dead_specs, redirect_specs, stream_specs = DockerSyncer.scan_docker_specs()
+    proxy_specs, dead_specs, redirect_specs, stream_specs = scan_docker_specs()
     total_specs = len(proxy_specs) + len(dead_specs) + len(redirect_specs) + len(stream_specs)
 
     if total_specs == 0 and not disable_orphans and not delete_orphans:
         logger.info("No docker containers found with required label prefix")
         return
 
-    with _client_context(readonly=dry_run) as client:
+    with client_context(readonly=dry_run) as client:
         try:
             if proxy_specs or disable_orphans or delete_orphans:
-                DockerSyncer.sync_docker_proxy_hosts(
+                sync_docker_proxy_hosts(
                     client=client,
-                    specs=proxy_specs,
-                    takeownership=takeownership,
+                    docker_specs=proxy_specs,
+                    take_ownership=take_ownership,
                     disable_orphans=disable_orphans,
                     delete_orphans=delete_orphans,
                 )
 
             if dead_specs or disable_orphans or delete_orphans:
-                DockerSyncer.sync_docker_dead_hosts(
+                sync_docker_dead_hosts(
                     client=client,
-                    specs=dead_specs,
-                    takeownership=takeownership,
+                    docker_specs=dead_specs,
+                    take_ownership=take_ownership,
                     disable_orphans=disable_orphans,
                     delete_orphans=delete_orphans,
                 )
 
             if redirect_specs or disable_orphans or delete_orphans:
-                DockerSyncer.sync_docker_redirection_hosts(
+                sync_docker_redirection_hosts(
                     client=client,
-                    specs=redirect_specs,
-                    takeownership=takeownership,
+                    docker_specs=redirect_specs,
+                    take_ownership=take_ownership,
                     disable_orphans=disable_orphans,
                     delete_orphans=delete_orphans,
                 )
 
             if stream_specs or disable_orphans or delete_orphans:
-                DockerSyncer.sync_docker_streams(
+                sync_docker_streams(
                     client=client,
-                    specs=stream_specs,
-                    takeownership=takeownership,
+                    docker_specs=stream_specs,
+                    take_ownership=take_ownership,
                     disable_orphans=disable_orphans,
                     delete_orphans=delete_orphans,
                 )
@@ -438,7 +392,7 @@ def json_to_compose(
         output_file = Path(paths[-1])
         inputs = [paths[0]]
 
-    input_files = _expand_input_files(inputs, require_suffix=".json")
+    input_files = expand_input_files(inputs, require_suffix=".json")
     if output_file is not None and len(input_files) != 1:
         raise typer.BadParameter("OUTPUT.yml can only be used when converting a single input file")
 
@@ -472,3 +426,4 @@ def json_to_compose(
             logger.info("Wrote %s", out_path)
         except ValueError as e:
             logger.warning("Skipping %s: %s", input_file.name, e)
+
