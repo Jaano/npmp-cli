@@ -9,7 +9,9 @@ __pycache__/
 /.vscode/
 /.coverage
 NPMplus/
+nginx-proxy-manager/
 npmp-config/
+proxy-test/
 /my-*.*
 /build
 /dist

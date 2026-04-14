@@ -52,6 +52,14 @@ npmp-cli --config .env sync-docker --dry-run
 - Does not manage global NPMplus settings.
 - Does not touch NPMplus server files, database, or Docker volumes directly; it only uses the HTTP API.
 - Does not manage the NPMplus deployment lifecycle (install/upgrade/restart) or run server-side scripts.
+- Does not support OIDC and 2FA (TOTP) authentication — the CLI uses password-based login only.
+
+## Compatibility
+
+| npmp-cli | NPMplus |
+|----------|---------------|
+| 0.3.x    | 2026-01-22-r1 |
+| 0.4.x    | 2026-04-12-r1 |
 
 ## Credits and stuff
 

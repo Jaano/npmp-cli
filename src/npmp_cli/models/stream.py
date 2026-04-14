@@ -184,9 +184,13 @@ class StreamItem:
             self.tcp_forwarding = payload.get("tcp_forwarding")
         if "udp_forwarding" in payload:
             self.udp_forwarding = payload.get("udp_forwarding")
-        if "proxy_protocol_forwarding" in payload:
+        if "npmplus_proxy_protocol_forwarding" in payload:
+            self.proxy_protocol_forwarding = payload.get("npmplus_proxy_protocol_forwarding")
+        elif "proxy_protocol_forwarding" in payload:
             self.proxy_protocol_forwarding = payload.get("proxy_protocol_forwarding")
-        if "proxy_ssl" in payload:
+        if "npmplus_proxy_tls" in payload:
+            self.proxy_ssl = payload.get("npmplus_proxy_tls")
+        elif "proxy_ssl" in payload:
             self.proxy_ssl = payload.get("proxy_ssl")
         if "enabled" in payload:
             self.enabled = payload.get("enabled")
@@ -217,8 +221,8 @@ class StreamItem:
             "forwarding_port": self.forwarding_port,
             "tcp_forwarding": self.tcp_forwarding,
             "udp_forwarding": self.udp_forwarding,
-            "proxy_protocol_forwarding": self.proxy_protocol_forwarding,
-            "proxy_ssl": self.proxy_ssl,
+            "npmplus_proxy_protocol_forwarding": self.proxy_protocol_forwarding,
+            "npmplus_proxy_tls": self.proxy_ssl,
         }
         if self.certificate is not None:
             if self.certificate.strip() == "":
@@ -239,8 +243,8 @@ class StreamItem:
             "forwarding_port": self.forwarding_port,
             "tcp_forwarding": self.tcp_forwarding,
             "udp_forwarding": self.udp_forwarding,
-            "proxy_protocol_forwarding": self.proxy_protocol_forwarding,
-            "proxy_ssl": self.proxy_ssl,
+            "npmplus_proxy_protocol_forwarding": self.proxy_protocol_forwarding,
+            "npmplus_proxy_tls": self.proxy_ssl,
             "certificate": self.certificate,
             "owner": self.owner,
             "owner_user_id": self.owner_user_id,

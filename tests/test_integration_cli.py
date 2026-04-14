@@ -81,8 +81,8 @@ def test_load_save_json_to_compose_roundtrip(npmplus_client: NPMplusClient, uniq
         yml = compose_out.read_text(encoding="utf-8")
         assert "services:" in yml
         assert "labels:" in yml
-        assert "npmp.domain_names" in yml
-        assert "npmp.forward_host" in yml
+        assert "npmp.proxy.domain_names" in yml
+        assert "npmp.proxy.forward_host" in yml
         assert "set $$host $$http_host;" in yml
         assert "set $host $http_host;" not in yml
 

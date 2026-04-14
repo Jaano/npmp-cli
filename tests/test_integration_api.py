@@ -4,10 +4,12 @@ import pytest
 
 from npmp_cli.models import (
     AccessListItem,
+    CertificateItem,
     DeadHostItem,
     ProxyHostItem,
     RedirectionHostItem,
     StreamItem,
+    UserItem,
 )
 from npmp_cli.npmplus_api import (
     EXPAND_ACCESS_LIST,
@@ -227,3 +229,110 @@ def test_stream_crud(npmplus_client: NPMplusClient, unique_suffix: str) -> None:
     finally:
         if created_id is not None:
             npmplus_client.delete_stream(created_id)
+
+
+def test_list_users(npmplus_client: NPMplusClient) -> None:
+    users = npmplus_client.list_users()
+    assert isinstance(users, dict)
+    assert len(users) > 0
+    for user in users.values():
+        assert isinstance(user, UserItem)
+    me = users.get(npmplus_client.my_id)
+    assert me is not None
+    assert me.id == npmplus_client.my_id
+    assert me.natural_index == npmplus_client.my_natural_index
+
+
+def test_list_certificates(npmplus_client: NPMplusClient) -> None:
+    certs = npmplus_client.list_certificates()
+    assert isinstance(certs, dict)
+    for cert in certs.values():
+        assert isinstance(cert, CertificateItem)
+    assert npmplus_client.get_certificate_id("__nonexistent__") == -1
+
+
+def test_get_proxy_host_id_helper(npmplus_client: NPMplusClient, unique_suffix: str) -> None:
+    domains = (f"npmp-cli-it-id-ph-{unique_suffix}.invalid",)
+    item = ProxyHostItem(
+        api=npmplus_client,
+        domain_names=list(domains),
+        forward_host="example.com",
+        forward_port=80,
+        forward_scheme="http",
+        enabled=True,
+    )
+    _, created = item.save()
+    created_id = int(str(created["id"]).strip())
+    try:
+        natural_index = domains[0].lower()
+        assert npmplus_client.get_proxy_host_id(natural_index) == created_id
+        assert npmplus_client.get_proxy_host_id("__nonexistent__") == -1
+    finally:
+        npmplus_client.delete_proxy_host(created_id)
+
+
+def test_get_access_list_id_helper(npmplus_client: NPMplusClient, unique_suffix: str) -> None:
+    name = f"npmp-cli-it-al-id-{unique_suffix}"
+    item = AccessListItem(api=npmplus_client, name=name, satisfy_any=False, pass_auth=False, items=[], clients=[])
+    _, created = item.save()
+    created_id = int(str(created["id"]).strip())
+    try:
+        assert npmplus_client.get_access_list_id(name) == created_id
+        assert npmplus_client.get_access_list_id("__nonexistent__") == -1
+    finally:
+        npmplus_client.delete_access_list(created_id)
+
+
+def test_get_redirection_host_id_helper(npmplus_client: NPMplusClient, unique_suffix: str) -> None:
+    domains = (f"npmp-cli-it-redir-id-{unique_suffix}.invalid",)
+    item = RedirectionHostItem(
+        api=npmplus_client,
+        domain_names=list(domains),
+        forward_scheme="http",
+        forward_domain_name="example.com",
+        forward_http_code=302,
+        enabled=True,
+    )
+    _, created = item.save()
+    created_id = int(str(created["id"]).strip())
+    try:
+        natural_index = domains[0].lower()
+        assert npmplus_client.get_redirection_host_id(natural_index) == created_id
+        assert npmplus_client.get_redirection_host_id("__nonexistent__") == -1
+    finally:
+        npmplus_client.delete_redirection_host(created_id)
+
+
+def test_get_dead_host_id_helper(npmplus_client: NPMplusClient, unique_suffix: str) -> None:
+    domains = (f"npmp-cli-it-dead-id-{unique_suffix}.invalid",)
+    item = DeadHostItem(api=npmplus_client, domain_names=list(domains), enabled=True)
+    _, created = item.save()
+    created_id = int(str(created["id"]).strip())
+    try:
+        natural_index = domains[0].lower()
+        assert npmplus_client.get_dead_host_id(natural_index) == created_id
+        assert npmplus_client.get_dead_host_id("__nonexistent__") == -1
+    finally:
+        npmplus_client.delete_dead_host(created_id)
+
+
+def test_get_stream_id_helper(npmplus_client: NPMplusClient, unique_suffix: str) -> None:
+    incoming_port = 32000 + (hash(unique_suffix) % 1000)
+    item = StreamItem(
+        api=npmplus_client,
+        incoming_port=incoming_port,
+        forwarding_host="example.com",
+        forwarding_port=80,
+        tcp_forwarding=True,
+        udp_forwarding=False,
+        enabled=True,
+    )
+    _, created = item.save()
+    created_id = int(str(created["id"]).strip())
+    try:
+        natural_index = f"{incoming_port}/tcp"
+        assert npmplus_client.get_stream_id(natural_index) == created_id
+        assert npmplus_client.get_stream_id("__nonexistent__") == -1
+    finally:
+        npmplus_client.delete_stream(created_id)
+

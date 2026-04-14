@@ -8,13 +8,15 @@ from typing import Any
 
 import pytest
 
+from npmp_cli.configmanager import ConfigManager
 from npmp_cli.npmplus_client import NPMplusClient
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _set_env_test_file() -> None:
-    if "NPMP_ENV_FILE" not in os.environ:
-        os.environ["NPMP_ENV_FILE"] = ".env.test"
+    env_file = os.environ.get("NPMP_ENV_FILE", "proxy-test/.env.test")
+    os.environ["NPMP_ENV_FILE"] = env_file
+    ConfigManager.load_dotenv(env_file)
 
 
 def bool_env(name: str, default: bool) -> bool:

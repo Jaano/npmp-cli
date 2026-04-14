@@ -4,17 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "npmp-cli"
-version = "0.3.14"
+version = "0.4.5"
 description = "Python CLI for NPMplus (ZoeyVid/NPMplus)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE.txt" }
 authors = [{ name = "Jaano" }]
 dependencies = [
-  "docker>=7.0",
-  "httpx>=0.26",
-  "python-dotenv>=1.0",
-  "typer>=0.12",
+  "docker>=7.1",
+  "httpx>=0.28",
+  "python-dotenv>=1.2",
+  "typer>=0.24",
 ]
 
 [project.urls]
@@ -23,12 +23,12 @@ Repository = "https://github.com/Jaano/npmp-cli"
 
 [project.optional-dependencies]
 dev = [
-  "pyinstaller>=6.11",
-  "pytest>=7.4",
-  "pytest-cov>=4.1",
-  "pyright>=1.1.390",
-  "ruff>=0.8",
-  "vulture>=2.11",
+  "pyinstaller>=6.19",
+  "pytest>=9.0",
+  "pytest-cov>=7.1",
+  "pyright>=1.1.408",
+  "ruff>=0.15",
+  "vulture>=2.16",
 ]
 
 [project.scripts]

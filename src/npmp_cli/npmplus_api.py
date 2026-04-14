@@ -43,6 +43,7 @@ class NPMplusApi:
     readonly: bool = False
 
     def __post_init__(self) -> None:
+        self.is_npmplus: bool = True
         url = self.base_url.strip()
         if not url:
             raise ValueError("base_url is required")
@@ -109,15 +110,45 @@ class NPMplusApi:
         """Login via `/tokens`.
 
         Returns the JSON body (typically `{"expires": <unix>}`) and stores the cookie.
+        Raises PermissionError if the server requires OIDC or if the account has 2FA enabled.
         """
         if not identity:
             raise ValueError("identity is required")
         if not secret:
             raise ValueError("secret is required")
+        health = self.get_health()
+        if isinstance(health.get("version"), dict):
+            self.is_npmplus = False
+            raise PermissionError(
+                "This server appears to be the original Nginx Proxy Manager, "
+                "which is not supported. This CLI requires NPMplus."
+            )
+        if health.get("password") is False:
+            raise PermissionError(
+                "This NPMplus server has password login disabled (OIDC only). "
+                "The CLI does not support OIDC authentication."
+            )
         logger.debug("Logging in to NPMplus")
         resp = self._web_request("POST", "tokens", json={"identity": identity, "secret": secret})
         if resp.status_code in (401, 403):
             logger.warning("Login failed with status_code=%s", resp.status_code)
+            try:
+                body = resp.json()
+            except Exception:
+                body = {}
+            if isinstance(body, dict):
+                msg = ""
+                err = body.get("error")
+                if isinstance(err, dict):
+                    msg = str(err.get("message", ""))
+                elif isinstance(err, str):
+                    msg = err
+            if "2fa" in msg.lower() or "two-factor" in msg.lower() or "otp" in msg.lower():
+                raise PermissionError(
+                    "Login rejected: this account has 2FA enabled. "
+                    "The CLI does not support 2FA authentication. "
+                    "Use a service account with 2FA disabled."
+                )
             raise PermissionError(f"Login failed ({resp.status_code})")
         self._raise_for_status(resp)
         logger.debug("Login succeeded")
@@ -537,17 +568,24 @@ class NPMplusApi:
             return
         self._post_bool(f"nginx/dead-hosts/{host_id}/disable")
 
+    _NPMPLUS_ONLY_STREAM_FIELDS: frozenset[str] = frozenset({"npmplus_proxy_tls", "npmplus_proxy_protocol_forwarding"})
+
     def create_stream(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self.readonly:
             logger.info("[dry-run] create_stream payload=%s", payload)
             return {"id": -1, **payload}
-        return self._form_json("post", "nginx/streams", payload)
+        return self._form_json("post", "nginx/streams", self._strip_stream_payload(payload))
 
     def update_stream(self, stream_id: int | str, payload: dict[str, Any]) -> dict[str, Any]:
         if self.readonly:
             logger.info("[dry-run] update_stream id=%s payload=%s", stream_id, payload)
             return {"id": stream_id, **payload}
-        return self._form_json("put", f"nginx/streams/{stream_id}", payload)
+        return self._form_json("put", f"nginx/streams/{stream_id}", self._strip_stream_payload(payload))
+
+    def _strip_stream_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.is_npmplus:
+            return payload
+        return {k: v for k, v in payload.items() if k not in self._NPMPLUS_ONLY_STREAM_FIELDS}
 
     def delete_stream(self, stream_id: int | str) -> None:
         if self.readonly:
