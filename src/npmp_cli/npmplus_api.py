@@ -27,14 +27,7 @@ EXPAND_STREAMS = "streams"
 
 @dataclass
 class NPMplusApi:
-    """NPMplus API wrapper.
-
-    NPMplus auth is cookie-based: `POST /api/tokens` sets an httpOnly, signed
-    `__Host-Http-token` cookie.
-
-    Endpoint coverage is based on the NPMplus backend routes included in this repo under
-    `NPMplus/backend/routes/*`.
-    """
+    """NPMplus API wrapper. Auth is cookie-based via `POST /api/tokens` (sets a signed `__Host-Http-token` cookie)."""
 
     base_url: str
     verify_tls: bool = True
@@ -69,20 +62,24 @@ class NPMplusApi:
             transport=self.transport,
         )
 
-    def _web_request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        """Execute an HTTP request with retry-on-disconnect behavior.
+    # Pre-send failures (server never saw the request); safe to retry for any method.
+    _PRE_SEND_TRANSPORT_ERRORS: tuple[type[Exception], ...] = (
+        httpx.ConnectError,
+        httpx.ConnectTimeout,
+    )
 
-        Retries are intended for transient disconnect/transport errors.
-        Total attempts = retry_count + 1.
-        """
+    def _web_request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Retry transient transport errors. Non-idempotent methods only retry pre-send failures, to avoid duplicating writes."""
+        method_u = method.upper()
         attempts = self.retry_count + 1
         for attempt in range(1, attempts + 1):
             try:
                 return self._client.request(method, path, **kwargs)
-            except httpx.TransportError:
-                if attempt >= attempts:
+            except httpx.TransportError as e:
+                retryable = method_u == "GET" or isinstance(e, self._PRE_SEND_TRANSPORT_ERRORS)
+                if not retryable or attempt >= attempts:
                     raise
-                # Small backoff; keep it short to avoid long CLI stalls.
+                # Short backoff to avoid long CLI stalls.
                 time.sleep(min(0.25 * attempt, 2.0))
         raise RuntimeError("request failed")
 
@@ -108,11 +105,7 @@ class NPMplusApi:
         )
 
     def login(self, identity: str, secret: str) -> dict[str, Any]:
-        """Login via `/tokens`.
-
-        Returns the JSON body (typically `{"expires": <unix>}`) and stores the cookie.
-        Raises PermissionError if the server requires OIDC or if the account has 2FA enabled.
-        """
+        """Login via `/tokens`; raises PermissionError if OIDC-only or 2FA is enabled."""
         if not identity:
             raise ValueError("identity is required")
         if not secret:
@@ -156,10 +149,7 @@ class NPMplusApi:
         return resp.json()
 
     def refresh_token(self, *, expiry: str | None = None, scope: str | None = None) -> dict[str, Any]:
-        """Refresh an existing token (or request a scoped one).
-
-        Maps to: `GET /api/tokens?expiry=...&scope=...`
-        """
+        """Refresh or request a scoped token. Maps to `GET /api/tokens`."""
         logger.debug("Refreshing NPMplus token")
         params: dict[str, Any] = {}
         if expiry is not None:
@@ -174,10 +164,7 @@ class NPMplusApi:
         return resp.json()
 
     def logout(self) -> bool:
-        """Logout by clearing token cookie on the server.
-
-        Maps to: `DELETE /api/tokens`
-        """
+        """Logout by clearing the token cookie. Maps to `DELETE /api/tokens`."""
         resp = self._web_request("DELETE", "tokens")
         if resp.status_code in (401, 403):
             raise PermissionError(f"Unauthorized ({resp.status_code}) for DELETE tokens")
@@ -189,10 +176,7 @@ class NPMplusApi:
         return bool(data)
 
     def get_health(self) -> dict[str, Any]:
-        """Health check.
-
-        Maps to: `GET /api` (base_url already ends with `/api`)
-        """
+        """Health check. Maps to `GET /api`."""
         resp = self._web_request("GET", "")
         self._raise_for_status(resp)
         data = resp.json()
@@ -235,11 +219,7 @@ class NPMplusApi:
         return self._delete_object(f"users/{user_id}")
 
     def delete_all_users_ci_only(self) -> bool:
-        """Delete ALL users.
-
-        This is only enabled by the server in CI/debug mode.
-        Maps to: `DELETE /api/users`
-        """
+        """Delete ALL users. Server only allows this in CI/debug mode. Maps to `DELETE /api/users`."""
         if self.readonly:
             logger.info("[dry-run] delete_all_users_ci_only")
             return True
@@ -382,10 +362,7 @@ class NPMplusApi:
         return self._form_json("post", "nginx/certificates/test-http", payload, timeout_s=timeout_s)
 
     def validate_certificate_files(self, files: dict[str, Any]) -> dict[str, Any]:
-        """Validate a certificate/key/chain upload.
-
-        Maps to: `POST /api/nginx/certificates/validate` (multipart form upload)
-        """
+        """Validate a certificate/key/chain upload. Maps to `POST /api/nginx/certificates/validate`."""
         resp = self._web_request("POST", "nginx/certificates/validate", files=files)
         if resp.status_code in (401, 403):
             raise PermissionError(f"Unauthorized ({resp.status_code}) for POST nginx/certificates/validate")
@@ -398,10 +375,7 @@ class NPMplusApi:
         return data
 
     def upload_certificate_files(self, certificate_id: int | str, files: dict[str, Any]) -> dict[str, Any]:
-        """Upload certificate files.
-
-        Maps to: `POST /api/nginx/certificates/{certificate_id}/upload` (multipart)
-        """
+        """Upload certificate files. Maps to `POST /api/nginx/certificates/{certificate_id}/upload`."""
         if self.readonly:
             logger.info("[dry-run] upload_certificate_files id=%s", certificate_id)
             return {"id": certificate_id}
@@ -436,11 +410,7 @@ class NPMplusApi:
         return data
 
     def download_certificate(self, certificate_id: int | str) -> httpx.Response:
-        """Download a certificate bundle.
-
-        Maps to: `GET /api/nginx/certificates/{certificate_id}/download`
-        Returns the raw response (typically an attachment).
-        """
+        """Download a certificate bundle. Maps to `GET /api/nginx/certificates/{certificate_id}/download`."""
         resp = self._web_request("GET", f"nginx/certificates/{certificate_id}/download")
         if resp.status_code in (401, 403):
             raise PermissionError(

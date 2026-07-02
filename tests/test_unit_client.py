@@ -102,6 +102,52 @@ def test_login_raises_generic_error_on_401_without_2fa_message() -> None:
         api.login("user@example.com", "wrongpassword")
 
 
+# ---------------------------------------------------------------------------
+# _web_request retry-on-transport-error tests
+# ---------------------------------------------------------------------------
+
+def _counting_raising_transport(exc: Exception, *, fail_times: int, ok_response: httpx.Response) -> tuple[httpx.MockTransport, list[str]]:
+    calls: list[str] = []
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.method)
+        if len(calls) <= fail_times:
+            raise exc
+        return ok_response
+
+    return httpx.MockTransport(_handler), calls
+
+
+def test_web_request_retries_get_on_read_timeout() -> None:
+    transport, calls = _counting_raising_transport(
+        httpx.ReadTimeout("timed out"), fail_times=1, ok_response=httpx.Response(200, json={})
+    )
+    api = _make_api(transport)
+    resp = api._web_request("GET", "nginx/proxy-hosts")
+    assert resp.status_code == 200
+    assert calls == ["GET", "GET"]
+
+
+def test_web_request_does_not_retry_post_on_read_timeout() -> None:
+    transport, calls = _counting_raising_transport(
+        httpx.ReadTimeout("timed out"), fail_times=1, ok_response=httpx.Response(200, json={})
+    )
+    api = _make_api(transport)
+    with pytest.raises(httpx.ReadTimeout):
+        api._web_request("POST", "nginx/proxy-hosts", json={})
+    assert calls == ["POST"]
+
+
+def test_web_request_retries_post_on_connect_error() -> None:
+    transport, calls = _counting_raising_transport(
+        httpx.ConnectError("connection refused"), fail_times=1, ok_response=httpx.Response(200, json={})
+    )
+    api = _make_api(transport)
+    resp = api._web_request("POST", "nginx/proxy-hosts", json={})
+    assert resp.status_code == 200
+    assert calls == ["POST", "POST"]
+
+
 def test_kind_inference() -> None:
     assert Kind.infer_json_kind({"forward_host": "x", "forward_port": 80}) == Kind.PROXY_HOSTS
     assert Kind.infer_json_kind({"forward_domain_name": "x"}) == Kind.REDIRECTION_HOSTS
