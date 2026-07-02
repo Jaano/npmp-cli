@@ -75,6 +75,8 @@ def parse_location(value: str) -> dict[str, Any]:
         "forward_host": host,
         "forward_port": port,
         "location_type": "",
+        "npmplus_access_list_ids": [],
+        "npmplus_access_list_type": "global",
     }
 
 
@@ -111,6 +113,12 @@ def parse_access_list_auth_items(*, auth_user: Sequence[str]) -> list[dict[str, 
 
 
 def access_list_name_from_value(value: object) -> str | None:
+    if isinstance(value, list):
+        for entry in value:
+            name = access_list_name_from_value(entry)
+            if name:
+                return name
+        return None
     if isinstance(value, dict):
         name = value.get("name") or value.get("title")
         if name is None:

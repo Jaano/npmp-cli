@@ -166,7 +166,8 @@ def test_proxy_host_to_payload_resolves_access_list_and_certificate_ids() -> Non
     )
 
     payload = item.to_payload()
-    assert payload["access_list_id"] == 456
+    assert payload["npmplus_access_list_ids"] == [456]
+    assert payload["npmplus_access_list_type"] == "custom"
     assert payload["certificate_id"] == 123
 
 

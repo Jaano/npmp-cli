@@ -12,7 +12,7 @@ from npmp_cli.models import (
     UserItem,
 )
 from npmp_cli.npmplus_api import (
-    EXPAND_ACCESS_LIST,
+    EXPAND_ACCESS_LISTS,
     EXPAND_CERTIFICATE,
     EXPAND_CLIENTS,
     EXPAND_ITEMS,
@@ -62,7 +62,7 @@ def test_proxy_host_crud(npmplus_client: NPMplusClient, unique_suffix: str) -> N
 
         update_payload = npmplus_client.get_proxy_host(
             created_id,
-            expand=(EXPAND_ACCESS_LIST, EXPAND_CERTIFICATE, EXPAND_OWNER),
+            expand=(EXPAND_ACCESS_LISTS, EXPAND_CERTIFICATE, EXPAND_OWNER),
         )
         update = ProxyHostItem.from_json(npmplus_client, update_payload)
         update.forward_host = "example.org"

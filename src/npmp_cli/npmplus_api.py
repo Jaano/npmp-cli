@@ -18,7 +18,7 @@ EXPAND_CERTIFICATE = "certificate"
 EXPAND_OWNER = "owner"
 EXPAND_ITEMS = "items"
 EXPAND_CLIENTS = "clients"
-EXPAND_ACCESS_LIST = "access_list"
+EXPAND_ACCESS_LISTS = "access_lists"
 EXPAND_PROXY_HOSTS = "proxy_hosts"
 EXPAND_REDIRECTION_HOSTS = "redirection_hosts"
 EXPAND_DEAD_HOSTS = "dead_hosts"
@@ -29,7 +29,8 @@ EXPAND_STREAMS = "streams"
 class NPMplusApi:
     """NPMplus API wrapper.
 
-    NPMplus auth is cookie-based: `POST /api/tokens` sets an httpOnly `token` cookie.
+    NPMplus auth is cookie-based: `POST /api/tokens` sets an httpOnly, signed
+    `__Host-Http-token` cookie.
 
     Endpoint coverage is based on the NPMplus backend routes included in this repo under
     `NPMplus/backend/routes/*`.
@@ -100,7 +101,7 @@ class NPMplusApi:
         logger.debug("Setting token cookie for API base_url=%s", self.base_url)
         base = httpx.URL(self.base_url)
         self._client.cookies.set(
-            "token",
+            "__Host-Http-token",
             token,
             domain=base.host,
             path="/api",

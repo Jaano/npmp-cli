@@ -11,6 +11,14 @@ if TYPE_CHECKING:
     from ..npmplus_client import NPMplusClient
 
 
+def _normalize_location(loc: Mapping[str, Any]) -> dict[str, Any]:
+    out = dict(loc)
+    ids_v = out.get("npmplus_access_list_ids")
+    out["npmplus_access_list_ids"] = [utils.normalize_int(v, default=0) for v in ids_v] if isinstance(ids_v, list) else []
+    out["npmplus_access_list_type"] = str(out.get("npmplus_access_list_type") or "global")
+    return out
+
+
 @dataclass
 class ProxyHostItem:
     kind: ClassVar[Kind] = Kind.PROXY_HOSTS
@@ -39,7 +47,7 @@ class ProxyHostItem:
     forward_port: int
     enabled: bool = True
     access_list: str | None = None
-    access_list_id: int = 0
+    access_list_ids: list[int] = field(default_factory=list)
     certificate: str | None = None
     certificate_id: int = 0
     ssl_forced: bool = False
@@ -70,7 +78,11 @@ class ProxyHostItem:
         forward_host = str(payload.get("forward_host") or "").strip()
         forward_scheme = str(payload.get("forward_scheme") or "").strip().lower()
         forward_port = utils.normalize_int(payload.get("forward_port"), default=0)
-        access_name = utils.access_list_name_from_value(payload.get("access_list") or payload.get("accessList"))
+        access_name = utils.access_list_name_from_value(
+            payload.get("access_lists") or payload.get("access_list") or payload.get("accessList")
+        )
+        access_ids_v = payload.get("npmplus_access_list_ids")
+        access_ids = [utils.normalize_int(v, default=0) for v in access_ids_v] if isinstance(access_ids_v, list) else []
         cert_name = utils.certificate_nice_name_from_value(payload.get("certificate") or payload.get("nice_name"))
 
         locs = payload.get("locations")
@@ -96,7 +108,7 @@ class ProxyHostItem:
             forward_host=forward_host,
             forward_port=utils.parse_port(forward_port, field="forward_port") if forward_port else 0,
             access_list=access_name,
-            access_list_id=utils.normalize_int(payload.get("access_list_id"), default=0),
+            access_list_ids=[v for v in access_ids if v > 0],
             certificate=cert_name,
             certificate_id=utils.normalize_int(payload.get("certificate_id"), default=0),
             ssl_forced=utils.bool_or(payload.get("ssl_forced"), default=False),
@@ -121,7 +133,7 @@ class ProxyHostItem:
             "forward_host": self.forward_host,
             "forward_port": self.forward_port,
             "access_list": self.access_list,
-            "access_list_id": self.access_list_id,
+            "access_list_ids": list(self.access_list_ids),
             "certificate": self.certificate,
             "certificate_id": self.certificate_id,
             "ssl_forced": self.ssl_forced,
@@ -157,19 +169,22 @@ class ProxyHostItem:
             "hsts_enabled": bool(self.hsts_enabled),
             "hsts_subdomains": bool(self.hsts_subdomains),
             "advanced_config": self.advanced_config,
-            "locations": list(self.locations),
+            "locations": [_normalize_location(loc) for loc in self.locations],
         }
 
         if self.access_list is not None:
             if self.access_list.strip() == "":
-                payload["access_list_id"] = 0
+                payload["npmplus_access_list_ids"] = []
+                payload["npmplus_access_list_type"] = "public"
             else:
                 access_id = self.api.get_access_list_id(self.access_list)
                 if access_id <= 0:
                     raise ValueError(f"Unknown access list: {self.access_list}")
-                payload["access_list_id"] = access_id
-        elif self.access_list_id:
-            payload["access_list_id"] = int(self.access_list_id)
+                payload["npmplus_access_list_ids"] = [access_id]
+                payload["npmplus_access_list_type"] = "custom"
+        elif self.access_list_ids:
+            payload["npmplus_access_list_ids"] = list(self.access_list_ids)
+            payload["npmplus_access_list_type"] = "custom"
 
         if self.certificate is not None:
             if self.certificate.strip() == "":

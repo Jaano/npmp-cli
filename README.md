@@ -60,6 +60,7 @@ npmp-cli --config .env sync-docker --dry-run
 |----------|---------------|
 | 0.3.x    | 2026-01-22-r1 |
 | 0.4.x    | 2026-04-12-r1 |
+| 0.5.x    | 2026-06-25-r1 |
 
 ## Credits and stuff
 

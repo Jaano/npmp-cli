@@ -13,7 +13,7 @@ from .models import (
     UserItem,
 )
 from .npmplus_api import (
-    EXPAND_ACCESS_LIST,
+    EXPAND_ACCESS_LISTS,
     EXPAND_CERTIFICATE,
     EXPAND_CLIENTS,
     EXPAND_DEAD_HOSTS,
@@ -108,7 +108,7 @@ class NPMplusClient(NPMplusApi):
         return -1
 
     def list_proxy_hosts(self) -> dict[int, ProxyHostItem]:
-        items = super().list_proxy_hosts(expand=(EXPAND_CERTIFICATE, EXPAND_OWNER, EXPAND_ACCESS_LIST))
+        items = super().list_proxy_hosts(expand=(EXPAND_CERTIFICATE, EXPAND_OWNER, EXPAND_ACCESS_LISTS))
         result: dict[int, ProxyHostItem] = {}
         for item in items:
             obj = ProxyHostItem.from_json(self, dict(item))
