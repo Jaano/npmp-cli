@@ -15,6 +15,7 @@ pytestmark = pytest.mark.integration
 
 
 def test_scan_and_sync(require_docker: bool, npmplus_client: NPMplusClient, unique_suffix: str) -> None:
+    assert require_docker
     try:
         import docker
     except Exception:
@@ -80,6 +81,7 @@ def test_scan_and_sync(require_docker: bool, npmplus_client: NPMplusClient, uniq
 
 
 def test_sync_dead_hosts(require_docker: bool, npmplus_client: NPMplusClient, unique_suffix: str) -> None:
+    assert require_docker
     try:
         import docker
     except Exception:
@@ -141,6 +143,7 @@ def test_sync_dead_hosts(require_docker: bool, npmplus_client: NPMplusClient, un
 
 
 def test_sync_redirection_hosts(require_docker: bool, npmplus_client: NPMplusClient, unique_suffix: str) -> None:
+    assert require_docker
     try:
         import docker
     except Exception:
@@ -205,6 +208,7 @@ def test_sync_redirection_hosts(require_docker: bool, npmplus_client: NPMplusCli
 
 
 def test_sync_streams(require_docker: bool, npmplus_client: NPMplusClient, unique_suffix: str) -> None:
+    assert require_docker
     try:
         import docker
     except Exception:

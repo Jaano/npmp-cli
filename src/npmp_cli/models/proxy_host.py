@@ -58,6 +58,7 @@ class ProxyHostItem:
     hsts_enabled: bool = False
     hsts_subdomains: bool = False
     advanced_config: str = ""
+    directory: str | None = None
     locations: list[dict[str, Any]] = field(default_factory=list)
     id: int = -1
     owner: str = ""
@@ -119,6 +120,7 @@ class ProxyHostItem:
             hsts_enabled=utils.bool_or(payload.get("hsts_enabled"), default=False),
             hsts_subdomains=utils.bool_or(payload.get("hsts_subdomains"), default=False),
             advanced_config=str(payload.get("advanced_config") or ""),
+            directory=utils.directory_from_payload(payload),
             locations=locations,
             owner=owner_name,
             owner_user_id=utils.normalize_int(payload.get("owner_user_id"), default=owner_id),
@@ -144,6 +146,7 @@ class ProxyHostItem:
             "hsts_enabled": self.hsts_enabled,
             "hsts_subdomains": self.hsts_subdomains,
             "advanced_config": self.advanced_config,
+            "directory": self.directory,
             "locations": list(self.locations),
             "owner": self.owner,
             "owner_user_id": self.owner_user_id,
@@ -196,6 +199,10 @@ class ProxyHostItem:
                 payload["certificate_id"] = cert_id
         elif self.certificate_id:
             payload["certificate_id"] = int(self.certificate_id)
+
+        if self.directory is not None:
+            d = self.directory.strip()
+            payload["meta"] = {"directory": d} if d else {}
 
         return payload
 

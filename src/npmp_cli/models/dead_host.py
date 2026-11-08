@@ -33,6 +33,7 @@ class DeadHostItem:
     certificate: str | None = None
     certificate_id: int = 0
     advanced_config: str = ""
+    directory: str | None = None
     id: int = -1
     owner: str = ""
     owner_user_id: int = 0
@@ -62,6 +63,7 @@ class DeadHostItem:
             certificate=cert_name,
             certificate_id=utils.normalize_int(payload.get("certificate_id"), default=0),
             advanced_config=str(payload.get("advanced_config") or ""),
+            directory=utils.directory_from_payload(payload),
             owner=owner_name,
             owner_user_id=utils.normalize_int(payload.get("owner_user_id"), default=owner_id),
         )
@@ -78,6 +80,7 @@ class DeadHostItem:
             "certificate": self.certificate,
             "certificate_id": self.certificate_id,
             "advanced_config": self.advanced_config,
+            "directory": self.directory,
             "owner": self.owner,
             "owner_user_id": self.owner_user_id,
         }
@@ -105,6 +108,10 @@ class DeadHostItem:
                 payload["certificate_id"] = cert_id
         elif self.certificate_id:
             payload["certificate_id"] = int(self.certificate_id)
+
+        if self.directory is not None:
+            d = self.directory.strip()
+            payload["meta"] = {"directory": d} if d else {}
 
         return payload
 

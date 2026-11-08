@@ -48,6 +48,8 @@ def proxy_host_show(
             print(f"access_list\t{item.access_list}")
         if item.certificate is not None:
             print(f"certificate\t{item.certificate}")
+        if item.directory is not None:
+            print(f"directory\t{item.directory}")
 
 
 @proxy_host_app.command("create")
@@ -66,6 +68,7 @@ def proxy_host_create(
     hsts_enabled: bool = typer.Option(False, "--hsts-enabled/--no-hsts-enabled"),
     hsts_subdomains: bool = typer.Option(False, "--hsts-subdomains/--no-hsts-subdomains"),
     advanced_config: str = typer.Option("", "--advanced-config"),
+    directory: str | None = typer.Option(None, "--directory", help="Group/directory name (empty string clears)"),
     location: list[str] = typer.Option([], "--location", help="Repeatable: path:scheme:host:port"),
     enabled: bool = typer.Option(True, "--enabled/--disabled"),
     dry_run: bool = typer.Option(False, "--dry-run"),
@@ -97,6 +100,7 @@ def proxy_host_create(
             hsts_enabled=hsts_enabled,
             hsts_subdomains=hsts_subdomains,
             advanced_config=advanced_config,
+            directory=directory,
             locations=locations,
         )
         payload = proxy.to_payload()
@@ -124,6 +128,7 @@ def proxy_host_update(
     hsts_enabled: bool | None = typer.Option(None, "--hsts-enabled/--no-hsts-enabled"),
     hsts_subdomains: bool | None = typer.Option(None, "--hsts-subdomains/--no-hsts-subdomains"),
     advanced_config: str | None = typer.Option(None, "--advanced-config"),
+    directory: str | None = typer.Option(None, "--directory", help="Group/directory name (empty string clears)"),
     location: list[str] | None = typer.Option(None, "--location", help="Repeatable: path:scheme:host:port (replaces locations)"),
     enabled: bool | None = typer.Option(None, "--enabled/--disabled"),
     take_ownership: bool = typer.Option(False, "--take-ownership"),
@@ -165,6 +170,8 @@ def proxy_host_update(
             proxy.hsts_subdomains = hsts_subdomains
         if advanced_config is not None:
             proxy.advanced_config = advanced_config
+        if directory is not None:
+            proxy.directory = directory
         if location is not None:
             proxy.locations = [utils.parse_location(x) for x in location]
         if enabled is not None:

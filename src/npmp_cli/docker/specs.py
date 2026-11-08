@@ -42,6 +42,7 @@ class DockerProxyHostSpec:
     hsts_subdomains: str | bool | None = None
     http2_support: str | bool | None = None
     ssl_forced: str | bool | None = None
+    directory: str | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,7 @@ class DockerDeadHostSpec:
     hsts_subdomains: str | bool | None = None
     http2_support: str | bool | None = None
     advanced_config: str | None = None
+    directory: str | None = None
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,7 @@ class DockerRedirectionHostSpec:
     hsts_subdomains: str | bool | None = None
     http2_support: str | bool | None = None
     advanced_config: str | None = None
+    directory: str | None = None
 
 
 @dataclass(frozen=True)
@@ -83,6 +86,7 @@ class DockerStreamSpec:
     proxy_protocol_forwarding: str | bool | None = None
     certificate: str | None = None
     enabled: str | bool | None = None
+    directory: str | None = None
 
 
 def warn_if_missing_access_list(
@@ -260,6 +264,9 @@ class ProxyHostFields:
         if (adv := payload.get("advanced_config")) is not None and str(adv).strip():
             labels.append((f"{prefix}advanced_config", str(adv)))
 
+        if directory := utils.directory_from_payload(payload):
+            labels.append((f"{prefix}directory", directory))
+
         labels.extend(_bool_label_pairs(payload, fields=ProxyHostItem.BOOL_LABEL_FIELDS, prefix=prefix))
 
         return labels
@@ -303,6 +310,7 @@ class ProxyHostFields:
             hsts_enabled=utils.bool_or(docker_spec.hsts_enabled, default=False),
             hsts_subdomains=utils.bool_or(docker_spec.hsts_subdomains, default=False),
             advanced_config=str(docker_spec.advanced_config or ""),
+            directory=docker_spec.directory,
             locations=locations,
         )
 
@@ -345,6 +353,9 @@ class DeadHostFields:
         if (adv := payload.get("advanced_config")) is not None and str(adv).strip():
             labels.append((f"{prefix}advanced_config", str(adv)))
 
+        if directory := utils.directory_from_payload(payload):
+            labels.append((f"{prefix}directory", directory))
+
         labels.extend(_bool_label_pairs(payload, fields=DeadHostItem.BOOL_LABEL_FIELDS, prefix=prefix))
 
         return labels
@@ -365,6 +376,7 @@ class DeadHostFields:
             hsts_subdomains=utils.bool_or(docker_spec.hsts_subdomains, default=False),
             certificate=(docker_spec.certificate or None),
             advanced_config=str(docker_spec.advanced_config or ""),
+            directory=docker_spec.directory,
         )
 
     @staticmethod
@@ -407,6 +419,9 @@ class RedirectionHostFields:
         if (adv := payload.get("advanced_config")) is not None and str(adv).strip():
             labels.append((f"{prefix}advanced_config", str(adv)))
 
+        if directory := utils.directory_from_payload(payload):
+            labels.append((f"{prefix}directory", directory))
+
         labels.extend(_bool_label_pairs(payload, fields=RedirectionHostItem.BOOL_LABEL_FIELDS, prefix=prefix))
 
         return labels
@@ -432,6 +447,7 @@ class RedirectionHostFields:
             hsts_subdomains=utils.bool_or(docker_spec.hsts_subdomains, default=False),
             certificate=(docker_spec.certificate or None),
             advanced_config=str(docker_spec.advanced_config or ""),
+            directory=docker_spec.directory,
         )
 
     @staticmethod
@@ -470,6 +486,9 @@ class StreamFields:
         if cert_name:
             labels.append((f"{prefix}certificate", cert_name))
 
+        if directory := utils.directory_from_payload(payload):
+            labels.append((f"{prefix}directory", directory))
+
         labels.extend(_bool_label_pairs(payload, fields=StreamItem.BOOL_LABEL_FIELDS, prefix=prefix))
 
         return labels
@@ -497,6 +516,7 @@ class StreamFields:
         if docker_spec.enabled is not None:
             item.enabled = docker_spec.enabled
         item.certificate = docker_spec.certificate
+        item.directory = docker_spec.directory
         return item
 
     @staticmethod

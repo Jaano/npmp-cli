@@ -122,71 +122,6 @@ def find_item_by_name(items: Mapping[int, Any], name: str) -> Any | None:
     return None
 
 
-def schema_request_properties(schema: Mapping[str, Any], path: str, method: str) -> set[str]:
-    paths = schema.get("paths")
-    if not isinstance(paths, dict):
-        return set()
-    op = paths.get(path)
-    if not isinstance(op, dict):
-        return set()
-    op_method = op.get(method.lower())
-    if not isinstance(op_method, dict):
-        return set()
-    rb = op_method.get("requestBody")
-    if not isinstance(rb, dict):
-        return set()
-    content = rb.get("content")
-    if not isinstance(content, dict):
-        return set()
-    app_json = content.get("application/json")
-    if not isinstance(app_json, dict):
-        return set()
-    s = app_json.get("schema")
-    if not isinstance(s, dict):
-        return set()
-    props = s.get("properties")
-    if not isinstance(props, dict):
-        return set()
-    return {str(k) for k in props.keys()}
-
-
-def schema_array_item_properties(schema: Mapping[str, Any], path: str, method: str, prop_name: str) -> set[str]:
-    paths = schema.get("paths")
-    if not isinstance(paths, dict):
-        return set()
-    op = paths.get(path)
-    if not isinstance(op, dict):
-        return set()
-    op_method = op.get(method.lower())
-    if not isinstance(op_method, dict):
-        return set()
-    rb = op_method.get("requestBody")
-    if not isinstance(rb, dict):
-        return set()
-    content = rb.get("content")
-    if not isinstance(content, dict):
-        return set()
-    app_json = content.get("application/json")
-    if not isinstance(app_json, dict):
-        return set()
-    s = app_json.get("schema")
-    if not isinstance(s, dict):
-        return set()
-    props = s.get("properties")
-    if not isinstance(props, dict):
-        return set()
-    arr = props.get(prop_name)
-    if not isinstance(arr, dict):
-        return set()
-    items = arr.get("items")
-    if not isinstance(items, dict):
-        return set()
-    item_props = items.get("properties")
-    if not isinstance(item_props, dict):
-        return set()
-    return {str(k) for k in item_props.keys()}
-
-
 def wait_for_field(
     list_func: Callable[..., Mapping[int, Any]],
     item_id: int,
@@ -278,8 +213,8 @@ class StubNPMplusClient:
     def delete_proxy_host(self, host_id: int) -> None:
         self.deleted_ids.append(host_id)
 
-    def enable_proxy_host(self, _host_id: int) -> None:
-        pass
+    def enable_proxy_host(self, *_args: object) -> None:
+        _ = _args
 
-    def disable_proxy_host(self, _host_id: int) -> None:
-        pass
+    def disable_proxy_host(self, *_args: object) -> None:
+        _ = _args

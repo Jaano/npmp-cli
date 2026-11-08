@@ -114,7 +114,8 @@ class AccessListItem:
 
     @staticmethod
     def _sanitize_clients(clients: list) -> list[dict[str, str]]:
-        out: list[dict[str, str]] = []
+        specific: list[dict[str, str]] = []
+        catch_all: dict[str, str] | None = None
         for entry in clients:
             if not isinstance(entry, Mapping):
                 continue
@@ -124,8 +125,13 @@ class AccessListItem:
                 continue
             if directive not in {"allow", "deny"}:
                 raise ValueError(f"Invalid access-list client directive: {directive!r}")
-            out.append({"address": address, "directive": directive})
-        return out
+            if address.lower() == "all":
+                catch_all = {"address": "all", "directive": directive}
+            else:
+                specific.append({"address": address, "directive": directive})
+        if catch_all is not None:
+            specific.append(catch_all)
+        return specific
 
     @staticmethod
     def _sanitize_items(items: list) -> list[dict[str, str]]:

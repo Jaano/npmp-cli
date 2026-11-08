@@ -13,51 +13,62 @@ from tests.test_configuration import find_item_by_domains
 pytestmark = pytest.mark.integration
 
 
-def test_schema_writes_file(npmplus_client: NPMplusClient) -> None:
+def test_schema_writes_file(
+    npmplus_client: NPMplusClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _ = npmplus_client
     runner = CliRunner()
-    with runner.isolated_filesystem():
-        result = runner.invoke(app, ["schema", "-o", "schema.json"])
-        assert result.exit_code == 0, result.output
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["schema", "-o", "schema.json"])
+    assert result.exit_code == 0, result.output
 
-        p = Path("schema.json")
-        assert p.exists()
-        payload = json.loads(p.read_text(encoding="utf-8"))
-        assert isinstance(payload, dict)
-        assert "paths" in payload
+    p = Path("schema.json")
+    assert p.exists()
+    payload = json.loads(p.read_text(encoding="utf-8"))
+    assert isinstance(payload, dict)
+    assert "paths" in payload
 
 
-def test_load_save_json_to_compose_roundtrip(npmplus_client: NPMplusClient, unique_invalid_domain: str) -> None:
+def test_load_save_json_to_compose_roundtrip(
+    npmplus_client: NPMplusClient,
+    unique_invalid_domain: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     runner = CliRunner()
 
     domains = (unique_invalid_domain,)
     created_id: int | None = None
 
-    with runner.isolated_filesystem():
-        f = Path("proxy-hosts__it.json")
-        f.write_text(
-            json.dumps(
-                {
-                    "domain_names": list(domains),
-                    "forward_host": "example.com",
-                    "forward_port": 80,
-                    "forward_scheme": "http",
-                    "enabled": True,
-                    "advanced_config": "set $host $http_host;\n",
-                },
-                ensure_ascii=False,
-                sort_keys=True,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
+    monkeypatch.chdir(tmp_path)
+    f = Path("proxy-hosts__it.json")
+    f.write_text(
+        json.dumps(
+            {
+                "domain_names": list(domains),
+                "forward_host": "example.com",
+                "forward_port": 80,
+                "forward_scheme": "http",
+                "enabled": True,
+                "advanced_config": "set $host $http_host;\n",
+                "directory": "Production",
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
-        result = runner.invoke(app, ["load", str(f)])
-        assert result.exit_code == 0, result.output
+    result = runner.invoke(app, ["load", str(f)])
+    assert result.exit_code == 0, result.output
 
-        found = find_item_by_domains(npmplus_client.list_proxy_hosts(), domains)
-        assert found is not None
-        created_id = int(found.id)
+    found = find_item_by_domains(npmplus_client.list_proxy_hosts(), domains)
+    assert found is not None
+    assert found.directory == "Production"
+    created_id = int(found.id)
 
+    try:
         out_dir = Path("out")
         result2 = runner.invoke(app, ["save", "--out", str(out_dir)])
         assert result2.exit_code == 0, result2.output
@@ -83,6 +94,7 @@ def test_load_save_json_to_compose_roundtrip(npmplus_client: NPMplusClient, uniq
         assert "labels:" in yml
         assert "npmp.proxy.domain_names" in yml
         assert "npmp.proxy.forward_host" in yml
+        assert "npmp.proxy.directory: \"Production\"" in yml
         assert "set $$host $$http_host;" in yml
         assert "set $host $http_host;" not in yml
 
@@ -103,20 +115,30 @@ def test_load_save_json_to_compose_roundtrip(npmplus_client: NPMplusClient, uniq
         assert domain_key_label is not None
         prefix = domain_key_label[: -len("domain_names")]
 
-        preferred_suffix_order = ["enabled", "domain_names", "forward_scheme", "forward_host", "forward_port"]
+        preferred_suffix_order = [
+            "enabled",
+            "domain_names",
+            "forward_scheme",
+            "forward_host",
+            "forward_port",
+            "directory",
+        ]
         seen_positions: list[int] = []
         for suffix in preferred_suffix_order:
             full_key = prefix + suffix
             if full_key in label_keys:
                 seen_positions.append(label_keys.index(full_key))
         assert seen_positions == sorted(seen_positions)
-
-    if created_id is not None:
-        npmplus_client.delete_proxy_host(created_id)
+    finally:
+        if created_id is not None:
+            npmplus_client.delete_proxy_host(created_id)
 
 
 def test_load_take_ownership_does_not_recreate_when_same_owner(
-    npmplus_client: NPMplusClient, unique_invalid_domain: str
+    npmplus_client: NPMplusClient,
+    unique_invalid_domain: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runner = CliRunner()
 
@@ -124,24 +146,25 @@ def test_load_take_ownership_does_not_recreate_when_same_owner(
     created_id: int | None = None
     updated_id: int | None = None
 
-    with runner.isolated_filesystem():
-        f = Path("proxy-hosts__it-take-ownership.json")
-        f.write_text(
-            json.dumps(
-                {
-                    "domain_names": list(domains),
-                    "forward_host": "example.com",
-                    "forward_port": 80,
-                    "forward_scheme": "http",
-                    "enabled": True,
-                },
-                ensure_ascii=False,
-                sort_keys=True,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
+    monkeypatch.chdir(tmp_path)
+    f = Path("proxy-hosts__it-take-ownership.json")
+    f.write_text(
+        json.dumps(
+            {
+                "domain_names": list(domains),
+                "forward_host": "example.com",
+                "forward_port": 80,
+                "forward_scheme": "http",
+                "enabled": True,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
+    try:
         r1 = runner.invoke(app, ["load", str(f)])
         assert r1.exit_code == 0, r1.output
 
@@ -175,6 +198,7 @@ def test_load_take_ownership_does_not_recreate_when_same_owner(
         assert updated_id == created_id
 
         assert found2.forward_host == "example.org"
-
-    if updated_id is not None:
-        npmplus_client.delete_proxy_host(updated_id)
+    finally:
+        cleanup_id = updated_id if updated_id is not None else created_id
+        if cleanup_id is not None:
+            npmplus_client.delete_proxy_host(cleanup_id)

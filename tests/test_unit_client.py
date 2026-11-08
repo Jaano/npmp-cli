@@ -5,9 +5,18 @@ from typing import cast
 import httpx
 import pytest
 
-from npmp_cli.models import Kind, ProxyHostItem
+from npmp_cli import utils
+from npmp_cli.models import (
+    AccessListItem,
+    DeadHostItem,
+    Kind,
+    ProxyHostItem,
+    RedirectionHostItem,
+    StreamItem,
+)
 from npmp_cli.npmplus_api import NPMplusApi
 from npmp_cli.npmplus_client import NPMplusClient
+from npmp_cli.ymlfilemanager import YmlFileManager
 from tests.test_configuration import StubNPMplusClient
 
 # ---------------------------------------------------------------------------
@@ -22,7 +31,8 @@ def _mock_transport(*responses: httpx.Response) -> httpx.MockTransport:
     """Return a MockTransport that serves each response in order."""
     queue = list(responses)
 
-    def _handler(request: httpx.Request) -> httpx.Response:
+    def _handler(_request: httpx.Request) -> httpx.Response:
+        _ = _request
         return queue.pop(0)
 
     return httpx.MockTransport(_handler)
@@ -230,3 +240,93 @@ def test_proxy_host_to_payload_raises_for_unknown_access_list() -> None:
 
     with pytest.raises(ValueError, match="Unknown access list"):
         item.to_payload()
+
+
+def test_host_and_stream_directory_handling() -> None:
+    api = cast(NPMplusClient, StubNPMplusClient())
+
+    ph = ProxyHostItem.from_json(
+        api,
+        {
+            "id": 1,
+            "domain_names": ["app.example.com"],
+            "forward_host": "127.0.0.1",
+            "forward_port": 8080,
+            "forward_scheme": "http",
+            "meta": {"directory": "  Production  ", "nginx_online": True},
+        },
+    )
+    assert ph.directory == "Production"
+    assert ph.to_json()["directory"] == "Production"
+    assert ph.to_payload()["meta"] == {"directory": "Production"}
+
+    ph.directory = ""
+    assert ph.to_payload()["meta"] == {}
+
+    dh = DeadHostItem.from_json(
+        api,
+        {
+            "id": 2,
+            "domain_names": ["dead.example.com"],
+            "meta": {"directory": "Staging"},
+        },
+    )
+    assert dh.directory == "Staging"
+    assert dh.to_payload()["meta"] == {"directory": "Staging"}
+
+    rh = RedirectionHostItem.from_json(
+        api,
+        {
+            "id": 3,
+            "domain_names": ["redir.example.com"],
+            "forward_scheme": "https",
+            "forward_domain_name": "example.com",
+            "forward_http_code": 302,
+            "directory": "Edge",
+        },
+    )
+    assert rh.directory == "Edge"
+    assert rh.to_payload()["meta"] == {"directory": "Edge"}
+
+    st = StreamItem.from_json(
+        api,
+        {
+            "id": 4,
+            "incoming_port": 9000,
+            "forwarding_host": "127.0.0.1",
+            "forwarding_port": 9000,
+            "meta": {"directory": "Streams"},
+        },
+    )
+    assert st.directory == "Streams"
+    assert st.to_payload()["meta"] == {"directory": "Streams"}
+
+    yml = YmlFileManager.proxy_host_json_to_compose_labels_yaml(ph.to_json() | {"directory": "Production"})
+    assert 'npmp.proxy.directory: "Production"' in yml
+
+
+def test_access_list_catch_all_client_rule_ordering() -> None:
+    api = cast(NPMplusClient, StubNPMplusClient())
+    clients = utils.parse_access_list_clients(allow=["ALL", "192.168.1.0/24"], deny=["10.0.0.0/8"])
+    assert clients == [
+        {"address": "192.168.1.0/24", "directive": "allow"},
+        {"address": "10.0.0.0/8", "directive": "deny"},
+        {"address": "all", "directive": "allow"},
+    ]
+
+    with pytest.raises(ValueError, match="Cannot specify both --allow all and --deny all"):
+        utils.parse_access_list_clients(allow=["all"], deny=["all"])
+
+    item = AccessListItem(
+        api=api,
+        name="My ACL",
+        clients=[
+            {"address": "ALL", "directive": "allow"},
+            {"address": "10.0.0.0/8", "directive": "deny"},
+        ],
+    )
+    assert item.to_payload()["clients"] == [
+        {"address": "10.0.0.0/8", "directive": "deny"},
+        {"address": "all", "directive": "allow"},
+    ]
+

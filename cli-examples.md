@@ -413,6 +413,12 @@ npmp-cli access-list create \
   --allow 10.0.0.0/8 \
   --deny 0.0.0.0/0
 
+# Deny specific subnet and allow all others
+npmp-cli access-list create \
+  --name 'Block Bad Subnet' \
+  --deny 198.51.100.0/24 \
+  --allow all
+
 # Basic auth users (username:password)
 npmp-cli access-list create \
   --name 'Admins' \

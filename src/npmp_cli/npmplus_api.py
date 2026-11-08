@@ -89,7 +89,8 @@ class NPMplusApi:
     def __enter__(self) -> NPMplusApi:
         return self
 
-    def __exit__(self, _exc_type, _exc, _tb) -> None:  # type: ignore[no-untyped-def]
+    def __exit__(self, *_args: object) -> None:
+        _ = _args
         self._web_close()
 
     def set_token_cookie(self, token: str) -> None:

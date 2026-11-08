@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 
@@ -81,18 +81,22 @@ def parse_location(value: str) -> dict[str, Any]:
 
 
 def parse_access_list_clients(*, allow: Sequence[str], deny: Sequence[str]) -> list[dict[str, str]]:
-    clients: list[dict[str, str]] = []
-    for address in allow:
-        addr = str(address or "").strip()
-        if not addr:
-            raise ValueError("--allow must not be empty")
-        clients.append({"address": addr, "directive": "allow"})
-    for address in deny:
-        addr = str(address or "").strip()
-        if not addr:
-            raise ValueError("--deny must not be empty")
-        clients.append({"address": addr, "directive": "deny"})
-    return clients
+    specific: list[dict[str, str]] = []
+    catch_all: dict[str, str] | None = None
+    for directive, addresses, flag in (("allow", allow, "--allow"), ("deny", deny, "--deny")):
+        for address in addresses:
+            addr = str(address or "").strip()
+            if not addr:
+                raise ValueError(f"{flag} must not be empty")
+            if addr.lower() == "all":
+                if catch_all is not None and catch_all["directive"] != directive:
+                    raise ValueError("Cannot specify both --allow all and --deny all")
+                catch_all = {"address": "all", "directive": directive}
+            else:
+                specific.append({"address": addr, "directive": directive})
+    if catch_all is not None:
+        specific.append(catch_all)
+    return specific
 
 
 def parse_access_list_auth_items(*, auth_user: Sequence[str]) -> list[dict[str, str]]:
@@ -141,4 +145,16 @@ def certificate_nice_name_from_value(value: object) -> str | None:
     if isinstance(value, str):
         s = value.strip()
         return s or None
+    return None
+
+
+def directory_from_payload(payload: Mapping[str, Any]) -> str | None:
+    raw = payload.get("directory")
+    if isinstance(raw, str) and (s := raw.strip()):
+        return s
+    meta = payload.get("meta")
+    if isinstance(meta, Mapping):
+        meta_dir = meta.get("directory")
+        if isinstance(meta_dir, str) and (s := meta_dir.strip()):
+            return s
     return None

@@ -277,6 +277,7 @@ class YmlFileManager:
             "http2_support",
             "hsts_enabled",
             "hsts_subdomains",
+            "directory",
         )
         preferred_keys = [f"{prefix}{suffix}" for suffix in preferred_suffix_order]
         preferred_rank = {k: i for i, k in enumerate(preferred_keys)}
@@ -323,6 +324,7 @@ class YmlFileManager:
             (f"{prefix}http2_support", "true"),
             (f"{prefix}hsts_enabled", "false"),
             (f"{prefix}hsts_subdomains", "false"),
+            (f"{prefix}directory", "Production"),
         ]
 
         for key, placeholder in optional_keys:
@@ -339,7 +341,7 @@ class YmlFileManager:
                 ],
             )
 
-        for idx, _loc in enumerate(YmlFileManager._get_locations(payload), start=1):
+        for idx in range(1, len(YmlFileManager._get_locations(payload)) + 1):
             if f"{prefix}loc{idx}_path" not in label_map:
                 continue
             for key, placeholder in (
@@ -385,6 +387,7 @@ class YmlFileManager:
             "http2_support",
             "hsts_enabled",
             "hsts_subdomains",
+            "directory",
         )
         preferred_keys = [f"{prefix}{suffix}" for suffix in preferred_suffix_order]
         preferred_rank = {k: i for i, k in enumerate(preferred_keys)}
@@ -418,6 +421,7 @@ class YmlFileManager:
             (f"{prefix}http2_support", "true"),
             (f"{prefix}hsts_enabled", "false"),
             (f"{prefix}hsts_subdomains", "false"),
+            (f"{prefix}directory", "Production"),
         ]
 
         for key, placeholder in optional_keys:
@@ -460,6 +464,7 @@ class YmlFileManager:
             "http2_support",
             "hsts_enabled",
             "hsts_subdomains",
+            "directory",
         )
         preferred_keys = [f"{prefix}{suffix}" for suffix in preferred_suffix_order]
         preferred_rank = {k: i for i, k in enumerate(preferred_keys)}
@@ -495,6 +500,7 @@ class YmlFileManager:
             (f"{prefix}http2_support", "true"),
             (f"{prefix}hsts_enabled", "false"),
             (f"{prefix}hsts_subdomains", "false"),
+            (f"{prefix}directory", "Production"),
         ]
 
         for key, placeholder in optional_keys:
@@ -533,6 +539,7 @@ class YmlFileManager:
             "udp_forwarding",
             "proxy_protocol_forwarding",
             "certificate",
+            "directory",
         )
         preferred_keys = [f"{prefix}{suffix}" for suffix in preferred_suffix_order]
         preferred_rank = {k: i for i, k in enumerate(preferred_keys)}
@@ -566,6 +573,7 @@ class YmlFileManager:
             (f"{prefix}udp_forwarding", "false"),
             (f"{prefix}proxy_protocol_forwarding", "false"),
             (f"{prefix}certificate", "my-cert"),
+            (f"{prefix}directory", "Production"),
         ]
 
         for key, placeholder in optional_keys:

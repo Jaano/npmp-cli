@@ -66,10 +66,12 @@ def test_proxy_host_crud(npmplus_client: NPMplusClient, unique_suffix: str) -> N
         )
         update = ProxyHostItem.from_json(npmplus_client, update_payload)
         update.forward_host = "example.org"
+        update.directory = "Production"
         update.enabled = False
         update.save()
 
         wait_for_field(npmplus_client.list_proxy_hosts, created_id, "enabled", False)
+        wait_for_field(npmplus_client.list_proxy_hosts, created_id, "directory", "Production")
 
     finally:
         if created_id is not None:
@@ -106,6 +108,10 @@ def test_access_list_crud(npmplus_client: NPMplusClient, unique_suffix: str) -> 
         )
         update = AccessListItem.from_json(npmplus_client, update_payload)
         update.satisfy_any = False
+        update.clients = [
+            {"address": "10.0.0.0/8", "directive": "deny"},
+            {"address": "all", "directive": "allow"},
+        ]
         update.save()
 
         wait_for_field(npmplus_client.list_access_lists, created_id, "satisfy_any", False)

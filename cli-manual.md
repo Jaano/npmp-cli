@@ -195,6 +195,7 @@ Manage proxy hosts.
     - `--hsts-enabled/--no-hsts-enabled`
     - `--hsts-subdomains/--no-hsts-subdomains`
     - `--advanced-config TEXT`
+    - `--directory TEXT` (empty string clears)
     - `--location TEXT` (repeatable; `path:scheme:host:port`)
     - `--enabled/--disabled` (default enabled)
     - `--dry-run`
@@ -218,7 +219,7 @@ Manage dead (404) hosts.
 - `npmp-cli dead-host show IDENTIFIER [--json]` (identifier is id or domain)
 - `npmp-cli dead-host create [OPTIONS]`
   - Required: `--domain-names`
-  - Optional: `--certificate`, `--ssl-forced/--no-ssl-forced`, `--http2-support/--no-http2-support`, `--hsts-enabled/--no-hsts-enabled`, `--hsts-subdomains/--no-hsts-subdomains`, `--advanced-config`, `--enabled/--disabled`, `--dry-run`
+  - Optional: `--certificate`, `--ssl-forced/--no-ssl-forced`, `--http2-support/--no-http2-support`, `--hsts-enabled/--no-hsts-enabled`, `--hsts-subdomains/--no-hsts-subdomains`, `--advanced-config`, `--directory`, `--enabled/--disabled`, `--dry-run`
 - `npmp-cli dead-host update IDENTIFIER [OPTIONS]`
   - Optional: same as create + `--take-ownership`
 - `npmp-cli dead-host delete IDENTIFIER [--force] [--dry-run]`
@@ -233,7 +234,7 @@ Manage redirection hosts.
 - `npmp-cli redirect-host show IDENTIFIER [--json]` (identifier is id or domain)
 - `npmp-cli redirect-host create [OPTIONS]`
   - Required: `--domain-names`, `--forward-scheme`, `--forward-domain-name`, `--forward-http-code`
-  - Optional: `--preserve-path/--no-preserve-path`, `--block-exploits/--no-block-exploits`, `--certificate`, `--ssl-forced/--no-ssl-forced`, `--http2-support/--no-http2-support`, `--hsts-enabled/--no-hsts-enabled`, `--hsts-subdomains/--no-hsts-subdomains`, `--advanced-config`, `--enabled/--disabled`, `--dry-run`
+  - Optional: `--preserve-path/--no-preserve-path`, `--block-exploits/--no-block-exploits`, `--certificate`, `--ssl-forced/--no-ssl-forced`, `--http2-support/--no-http2-support`, `--hsts-enabled/--no-hsts-enabled`, `--hsts-subdomains/--no-hsts-subdomains`, `--advanced-config`, `--directory`, `--enabled/--disabled`, `--dry-run`
 - `npmp-cli redirect-host update IDENTIFIER [OPTIONS]`
   - Optional: same as create + `--take-ownership`
 - `npmp-cli redirect-host delete IDENTIFIER [--force] [--dry-run]`
@@ -248,7 +249,7 @@ Manage streams.
 - `npmp-cli stream show IDENTIFIER [--json]` (identifier is id or incoming port)
 - `npmp-cli stream create [OPTIONS]`
   - Required: `--incoming-port`, `--forwarding-host`, `--forwarding-port`
-  - Optional: `--tcp-forwarding/--no-tcp-forwarding`, `--udp-forwarding/--no-udp-forwarding`, `--proxy-protocol-forwarding/--no-proxy-protocol-forwarding`, `--proxy-ssl/--no-proxy-ssl`, `--certificate`, `--enabled/--disabled`, `--dry-run`
+  - Optional: `--tcp-forwarding/--no-tcp-forwarding`, `--udp-forwarding/--no-udp-forwarding`, `--proxy-protocol-forwarding/--no-proxy-protocol-forwarding`, `--proxy-ssl/--no-proxy-ssl`, `--certificate`, `--directory`, `--enabled/--disabled`, `--dry-run`
 - `npmp-cli stream update IDENTIFIER [OPTIONS]`
   - Optional: same as create + `--take-ownership`
 - `npmp-cli stream delete IDENTIFIER [--force] [--dry-run]`
@@ -266,8 +267,8 @@ Manage access lists.
   - Optional:
     - `--satisfy-any/--satisfy-all` (default satisfy-any)
     - `--pass-auth/--no-pass-auth`
-    - `--allow IP_OR_CIDR` (repeatable)
-    - `--deny IP_OR_CIDR` (repeatable)
+    - `--allow IP_OR_CIDR` (repeatable; use `all` for a final allow-all catch-all rule)
+    - `--deny IP_OR_CIDR` (repeatable; use `all` for a final deny-all catch-all rule)
     - `--auth-user USERNAME:PASSWORD` (repeatable)
     - `--dry-run`
 - `npmp-cli access-list update IDENTIFIER [OPTIONS]`
@@ -331,6 +332,7 @@ The label prefix defaults to `npmp.` and can be changed via `NPMP_DOCKER_LABEL_P
 | `npmp.proxy[N].loc[N]_forward_host` | no | Custom location forward hostname / IP |
 | `npmp.proxy[N].loc[N]_forward_port` | no | Custom location forward port |
 | `npmp.proxy[N].advanced_config` | no | Custom Nginx configuration |
+| `npmp.proxy[N].directory` | no | Group / directory name |
 | `npmp.proxy[N].enabled` | no | Enabled (true/false) |
 
 ### Dead/404 host labels
@@ -344,6 +346,7 @@ The label prefix defaults to `npmp.` and can be changed via `NPMP_DOCKER_LABEL_P
 | `npmp.dead[N].hsts_enabled` | no | HSTS enabled (true/false) |
 | `npmp.dead[N].hsts_subdomains` | no | HSTS sub-domains (true/false) |
 | `npmp.dead[N].advanced_config` | no | Custom Nginx configuration |
+| `npmp.dead[N].directory` | no | Group / directory name |
 | `npmp.dead[N].enabled` | no | Enabled (true/false) |
 
 ### Redirection-host labels
@@ -362,6 +365,7 @@ The label prefix defaults to `npmp.` and can be changed via `NPMP_DOCKER_LABEL_P
 | `npmp.redirect[N].hsts_enabled` | no | HSTS enabled (true/false) |
 | `npmp.redirect[N].hsts_subdomains` | no | HSTS sub-domains (true/false) |
 | `npmp.redirect[N].advanced_config` | no | Custom Nginx configuration |
+| `npmp.redirect[N].directory` | no | Group / directory name |
 | `npmp.redirect[N].enabled` | no | Enabled (true/false) |
 
 ### Stream labels
@@ -375,6 +379,7 @@ The label prefix defaults to `npmp.` and can be changed via `NPMP_DOCKER_LABEL_P
 | `npmp.stream[N].udp_forwarding` | no | UDP (true/false) |
 | `npmp.stream[N].proxy_protocol_forwarding` | no | Proxy protocol forwarding (true/false) |
 | `npmp.stream[N].certificate` | no | TLS certificate (certificate nice_name) |
+| `npmp.stream[N].directory` | no | Group / directory name |
 | `npmp.stream[N].enabled` | no | Enabled (true/false) |
 
 ## Where to find runnable examples

@@ -49,6 +49,8 @@ def stream_show(
         print(f"udp_forwarding\t{int(bool(item.udp_forwarding))}")
         if item.certificate is not None:
             print(f"certificate\t{item.certificate}")
+        if item.directory is not None:
+            print(f"directory\t{item.directory}")
 
 
 @stream_app.command("create")
@@ -60,6 +62,7 @@ def stream_create(
     udp_forwarding: bool = typer.Option(False, "--udp-forwarding/--no-udp-forwarding"),
     proxy_protocol_forwarding: bool = typer.Option(False, "--proxy-protocol-forwarding/--no-proxy-protocol-forwarding"),
     certificate: str | None = typer.Option(None, "--certificate", help="Certificate nice_name (empty string clears)"),
+    directory: str | None = typer.Option(None, "--directory", help="Group/directory name (empty string clears)"),
     enabled: bool = typer.Option(True, "--enabled/--disabled"),
     dry_run: bool = typer.Option(False, "--dry-run"),
 ) -> None:
@@ -80,6 +83,7 @@ def stream_create(
         item.udp_forwarding = udp_forwarding
         item.proxy_protocol_forwarding = proxy_protocol_forwarding
         item.certificate = certificate
+        item.directory = directory
         item.enabled = enabled
 
         payload = item.to_payload()
@@ -100,6 +104,7 @@ def stream_update(
     udp_forwarding: bool | None = typer.Option(None, "--udp-forwarding/--no-udp-forwarding"),
     proxy_protocol_forwarding: bool | None = typer.Option(None, "--proxy-protocol-forwarding/--no-proxy-protocol-forwarding"),
     certificate: str | None = typer.Option(None, "--certificate", help="Certificate nice_name (empty string clears)"),
+    directory: str | None = typer.Option(None, "--directory", help="Group/directory name (empty string clears)"),
     enabled: bool | None = typer.Option(None, "--enabled/--disabled"),
     take_ownership: bool = typer.Option(False, "--take-ownership"),
     dry_run: bool = typer.Option(False, "--dry-run"),
@@ -125,6 +130,8 @@ def stream_update(
             item.proxy_protocol_forwarding = proxy_protocol_forwarding
         if certificate is not None:
             item.certificate = certificate
+        if directory is not None:
+            item.directory = directory
         if enabled is not None:
             item.enabled = enabled
 

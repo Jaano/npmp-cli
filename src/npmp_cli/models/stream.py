@@ -32,6 +32,7 @@ class StreamItem:
         proxy_protocol_forwarding: object = False,
         proxy_ssl: object = False,
         certificate: object = None,
+        directory: object = None,
         enabled: object = True,
         id: object = -1,
         owner: object = "",
@@ -46,6 +47,7 @@ class StreamItem:
         self.proxy_protocol_forwarding = proxy_protocol_forwarding
         self.proxy_ssl = proxy_ssl
         self.certificate = certificate
+        self.directory = directory
         self.enabled = enabled
         self.id = id
         self.owner = owner
@@ -148,6 +150,17 @@ class StreamItem:
         self._certificate = s
 
     @property
+    def directory(self) -> str | None:
+        return self._directory
+
+    @directory.setter
+    def directory(self, value: object) -> None:
+        if value is None:
+            self._directory = None
+            return
+        self._directory = str(value).strip()
+
+    @property
     def id(self) -> int:
         return self._id
 
@@ -196,6 +209,11 @@ class StreamItem:
             self.enabled = payload.get("enabled")
         if "certificate" in payload:
             self.certificate = payload.get("certificate")
+        dir_val = utils.directory_from_payload(payload)
+        if dir_val is not None:
+            self.directory = dir_val
+        elif "directory" in payload and payload.get("directory") == "":
+            self.directory = ""
         owner_data = payload.get("owner")
         if isinstance(owner_data, Mapping):
             self.owner = owner_data.get("nickname")
@@ -232,6 +250,9 @@ class StreamItem:
                 if cert_id <= 0:
                     raise ValueError(f"Unknown certificate: {self.certificate}")
                 payload["certificate_id"] = cert_id
+        if self.directory is not None:
+            d = self.directory.strip()
+            payload["meta"] = {"directory": d} if d else {}
         return payload
 
     def to_json(self) -> dict[str, Any]:
@@ -246,6 +267,7 @@ class StreamItem:
             "npmplus_proxy_protocol_forwarding": self.proxy_protocol_forwarding,
             "npmplus_proxy_tls": self.proxy_ssl,
             "certificate": self.certificate,
+            "directory": self.directory,
             "owner": self.owner,
             "owner_user_id": self.owner_user_id,
         }

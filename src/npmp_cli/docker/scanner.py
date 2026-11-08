@@ -112,6 +112,7 @@ def extract_proxy_host_spec_from_grouped_labels(
         hsts_subdomains=docker_fields.get("hsts_subdomains"),
         http2_support=docker_fields.get("http2_support"),
         ssl_forced=docker_fields.get("ssl_forced"),
+        directory=docker_fields.get("directory"),
     )
 
 
@@ -136,6 +137,7 @@ def extract_dead_host_spec_from_grouped_labels(
         hsts_subdomains=docker_fields.get("hsts_subdomains"),
         http2_support=docker_fields.get("http2_support"),
         advanced_config=docker_fields.get("advanced_config"),
+        directory=docker_fields.get("directory"),
     )
 
 
@@ -169,6 +171,7 @@ def extract_redirection_host_spec_from_grouped_labels(
         hsts_subdomains=docker_fields.get("hsts_subdomains"),
         http2_support=docker_fields.get("http2_support"),
         advanced_config=docker_fields.get("advanced_config"),
+        directory=docker_fields.get("directory"),
     )
 
 
@@ -191,6 +194,7 @@ def extract_stream_spec_from_grouped_labels(
         proxy_protocol_forwarding=docker_fields.get("proxy_protocol_forwarding"),
         certificate=docker_fields.get("certificate"),
         enabled=docker_fields.get("enabled"),
+        directory=docker_fields.get("directory"),
     )
 
 
